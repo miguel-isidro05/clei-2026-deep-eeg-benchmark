@@ -11,6 +11,8 @@ from deepbench.statistics import (
     load_cells,
     mean_ci,
     paired_model_tests,
+    paired_rank_biserial,
+    sample_accounting_table,
     write_statistics,
 )
 
@@ -61,6 +63,45 @@ def test_student_t_confidence_interval_contains_mean() -> None:
     mean, low, high = mean_ci(np.array([0.1, 0.2, 0.3, 0.4]))
     assert low < mean < high
     assert np.isclose(mean, 0.25)
+
+
+def test_paired_rank_biserial_keeps_difference_direction() -> None:
+    assert paired_rank_biserial(np.array([1.0, 2.0, 3.0])) == pytest.approx(1.0)
+    assert paired_rank_biserial(np.array([-1.0, -2.0, -3.0])) == pytest.approx(-1.0)
+    assert paired_rank_biserial(np.zeros(3)) == pytest.approx(0.0)
+
+
+def test_sample_accounting_exports_fold_class_counts() -> None:
+    payloads = [
+        {
+            "dataset": "D",
+            "task": "binary",
+            "protocol": "within_split",
+            "condition": "overlap",
+            "ica_policy": "none",
+            "model": "EEGNet",
+            "subject": "1",
+            "seed": 0,
+            "fold_reports": [
+                {
+                    "session": "session_0",
+                    "fold": 0,
+                    "n_train_trials": 10,
+                    "n_train_examples": 60,
+                    "n_test_trials": 4,
+                    "train_class_counts": {"0": 5, "1": 5},
+                    "test_class_counts": {"0": 2, "1": 2},
+                }
+            ],
+        }
+    ]
+    table = sample_accounting_table(payloads)
+    assert len(table) == 1
+    assert table.iloc[0]["n_train_examples"] == 60
+    assert table.iloc[0]["train_class_0"] == 5
+    assert table.iloc[0]["train_class_1"] == 5
+    assert table.iloc[0]["test_class_0"] == 2
+    assert table.iloc[0]["test_class_1"] == 2
 
 
 def test_paired_models_require_identical_subject_cohorts() -> None:
