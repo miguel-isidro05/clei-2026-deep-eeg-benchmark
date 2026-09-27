@@ -6,13 +6,14 @@
   "lint_passed": true,
   "preflight_passed": true,
   "real_smoke_passed": true,
+  "tavakolan_real_smoke_passed": true,
   "planned_cells": 3350,
   "paper_results_complete": false,
   "patches_applied": true,
   "go_for_short_pilot": true,
   "go_for_full_paper_run": true,
   "blocking_decisions": [],
-  "final_review_status": "pending_recheck",
+  "final_review_status": "passed",
   "manuscript_reconciled": true,
   "inferential_claims_verified": false
 }

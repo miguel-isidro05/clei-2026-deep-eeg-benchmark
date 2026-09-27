@@ -72,6 +72,16 @@ pytest
 ruff check .
 ```
 
+Antes de la matriz completa, valide también el lector y las cuatro sesiones de Tavakolan con una
+sola celda de una época:
+
+```bash
+python scripts/run_experiments.py \
+  --dataset Tavakolan2017 --subjects 1 --models EEGNet \
+  --protocols within_split --conditions full --seeds 0 --epochs 1 \
+  --ica-policy none --device cuda --output-dir results_tavakolan_pilot
+```
+
 ## Perfil completo del paper
 
 El proceso es reanudable: una celda ya terminada se omite. Ejecute las fases dentro de `tmux` o

@@ -28,6 +28,8 @@ Stieger2021. Stieger2021 queda fuera por su costo, tamaño y licencia no comerci
 - Plan paper: 3.350 celdas, incluidas 250 `within_session` y 800 `cross_session`.
 - Smoke real MI-OpenBCI/S02/EEGNet aprobado con hashes de entorno y datos, procedencia de receta,
   conteos de clase y `sample_accounting.csv`.
+- Smoke real Tavakolan2017/sujeto 1/EEGNet aprobado: 160 trials balanceados, 32 canales,
+  384 muestras, cuatro sesiones de 40 trials y cuatro folds `within_split` completados.
 - El smoke incompleto no generó inferencia confirmatoria.
 - La revisión independiente de Python detectó y se corrigieron tres riesgos: dependencia opcional
   ausente para Tavakolan2017, métricas no finitas antes de Wilcoxon-Holm y commits solo

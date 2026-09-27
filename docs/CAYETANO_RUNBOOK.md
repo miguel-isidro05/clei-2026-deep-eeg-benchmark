@@ -29,15 +29,27 @@ python scripts/run_experiments.py --dataset MI-OpenBCI --subjects S02 \
 Revise `nvidia-smi`, el tiempo de cada epoch en `training_history` y el espacio en disco. Multiplique
 el tiempo observado de forma conservadora antes de lanzar 300 epochs.
 
+Valide por separado el lector BCI2000 y las cuatro sesiones externas:
+
+```bash
+python scripts/run_experiments.py --dataset Tavakolan2017 --subjects 1 \
+  --models EEGNet --protocols within_split --conditions full --seeds 0 --epochs 1 \
+  --ica-policy none --device cuda --output-dir results_tavakolan_pilot
+```
+
 ## 3. Corrida paper
 
 Ejecute cada fase por separado dentro de `tmux`, `screen` o un job persistente:
 
 ```bash
+python scripts/run_paper.py --phase all --plan-only
 python scripts/run_paper.py --phase primary --device cuda
 python scripts/run_paper.py --phase external --device cuda
 python scripts/run_paper.py --phase ica-sensitivity --device cuda
 ```
+
+Regenerar primero el manifiesto `--phase all --plan-only` garantiza que el gate use el perfil
+vigente. No edite ni recicle manualmente manifiestos de otra revisión.
 
 Puede repetir exactamente el mismo comando tras una interrupcion. Se omiten celdas compatibles y
 se recuperan folds finalizados. Si el codigo, epochs o receta cambiaron, el programa se detiene en
