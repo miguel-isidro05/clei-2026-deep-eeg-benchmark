@@ -1,5 +1,8 @@
 # Auditoría científica del benchmark
 
+> Auditoría histórica de `e39fd1e`. Consulte `RESOLUTION_REPORT.md` para el estado posterior de los
+> bloqueantes. Este archivo no se reescribe para preservar la trazabilidad del dictamen original.
+
 Fecha: 2026-09-27
 
 Revisión auditada: `e39fd1eb8a4c2ce06d4f9267063633379afc54e8`

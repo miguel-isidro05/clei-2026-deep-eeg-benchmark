@@ -1,21 +1,17 @@
 {
-  "status": "audit_complete_conditional_no_go",
+  "status": "scientific_blockers_resolved_results_pending",
   "date": "2026-09-27",
   "audited_revision": "e39fd1eb8a4c2ce06d4f9267063633379afc54e8",
-  "tests_passed": 26,
+  "tests_passed": 38,
   "lint_passed": true,
   "preflight_passed": true,
   "real_smoke_passed": true,
-  "planned_cells": 2950,
+  "planned_cells": 3350,
   "paper_results_complete": false,
   "patches_applied": false,
   "go_for_short_pilot": true,
-  "go_for_full_paper_run": false,
-  "blocking_decisions": [
-    "include_or_remove_with_justification_the_within_session_5fold_protocol",
-    "freeze_binary_or_four_class_definition_for_BNCI2014_001",
-    "freeze_hyperparameter_provenance_and_environment_data_identity"
-  ],
-  "manuscript_reconciled": false,
+  "go_for_full_paper_run": true,
+  "blocking_decisions": [],
+  "manuscript_reconciled": true,
   "inferential_claims_verified": false
 }

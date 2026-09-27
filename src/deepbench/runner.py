@@ -19,7 +19,7 @@ from .evaluation import run_loso_cell, run_subject_cell
 from .io import read_json, write_json_atomic
 from .models import recipe_dict
 
-RUN_SCHEMA_VERSION = 1
+RUN_SCHEMA_VERSION = 2
 SCIENTIFIC_PACKAGES = (
     "torch",
     "braindecode",

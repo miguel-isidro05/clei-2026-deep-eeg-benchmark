@@ -5,7 +5,9 @@ import pytest
 from deepbench.runner import _environment_identity, _run_identity, run_job
 
 
-def _identity(epochs: int, *, data_sha256: str = "data-a", environment_sha256: str = "env-a") -> str:
+def _identity(
+    epochs: int, *, data_sha256: str = "data-a", environment_sha256: str = "env-a"
+) -> str:
     fingerprint, _ = _run_identity(
         dataset="MI-OpenBCI",
         protocol="within_split",

@@ -47,6 +47,10 @@ def _validate_run_configurations(payloads: list[dict[str, object]]) -> None:
         missing = [key for key in GLOBAL_COMPATIBILITY_KEYS if key not in configuration]
         if missing:
             raise ValueError(f"run_configuration is missing compatibility fields: {missing}")
+        if not configuration.get("data_sha256"):
+            raise ValueError("run_configuration is missing data_sha256")
+        if not isinstance(configuration.get("environment_versions"), dict):
+            raise ValueError("run_configuration is missing environment_versions")
         global_signatures.add(tuple(configuration[key] for key in GLOBAL_COMPATIBILITY_KEYS))
         model = str(payload["model"])
         recipe = json.dumps(configuration.get("recipe"), sort_keys=True)
@@ -348,7 +352,10 @@ def write_statistics(
         "all_seed_metrics.csv": frame,
         "descriptive_subject_seed_variability.csv": descriptive_table(frame),
         "sample_accounting.csv": sample_accounting_table(
-            [json.loads(path.read_text(encoding="utf-8")) for path in sorted(cells_dir.glob("*.json"))]
+            [
+                json.loads(path.read_text(encoding="utf-8"))
+                for path in sorted(cells_dir.glob("*.json"))
+            ]
         ),
     }
     if incomplete:

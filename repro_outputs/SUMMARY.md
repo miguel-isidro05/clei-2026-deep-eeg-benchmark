@@ -1,5 +1,8 @@
 # Resumen de auditoría científica
 
+> Este documento conserva el dictamen sobre la revisión `e39fd1e`. Los bloqueantes de diseño se
+> corrigieron después en `RESOLUTION_REPORT.md`. Los resultados completos siguen pendientes.
+
 ## Dictamen
 
 El pipeline es ejecutable y cubre correctamente el núcleo solicitado: cinco decoders deep,

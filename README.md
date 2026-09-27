@@ -9,8 +9,8 @@ estadistica.
 
 - MI-OpenBCI: dataset low-cost principal, motor imagery frente a rest.
 - Zhou2020: validacion research-grade task-matched, right hand frente a rest y siete sesiones.
-- BNCI2014_001, BCI Competition IV 2a: benchmark canonico cross-session, left hand frente a right
-  hand.
+- Tavakolan2017: validacion research-grade task-matched, right hand frente a rest, con cuatro
+  sesiones y un costo computacional manejable.
 - AlexMI: prueba rapida de instalacion, no resultado principal.
 
 Los resultados entre datasets se reportan por separado. No deben interpretarse como una estimacion
@@ -34,7 +34,7 @@ En PowerShell, luego de copiar los archivos MAT de MI-OpenBCI a una carpeta loca
 $env:CLEI_DATA_DIR="D:\datos\Database-MIOpenBCI-main"
 $env:MNE_DATA="D:\datos\mne"
 python scripts\preflight.py --require-cuda
-python scripts\download_moabb.py --datasets Zhou2020 BNCI2014_001
+python scripts\download_moabb.py --datasets Zhou2020 Tavakolan2017
 ```
 
 En Linux o WSL2:
@@ -43,7 +43,7 @@ En Linux o WSL2:
 export CLEI_DATA_DIR=/datos/Database-MIOpenBCI-main
 export MNE_DATA=/datos/mne
 python scripts/preflight.py --require-cuda
-python scripts/download_moabb.py --datasets Zhou2020 BNCI2014_001
+python scripts/download_moabb.py --datasets Zhou2020 Tavakolan2017
 ```
 
 No suba los datasets al repositorio. MOABB conserva sus descargas en `MNE_DATA` y las reutiliza.
@@ -86,13 +86,13 @@ python scripts/profile_latency.py --device cuda
 python scripts/run_statistics.py
 ```
 
-`primary` ejecuta MI-OpenBCI sin ICA, con trials completos, within-session 70/30, LOSO y el
-experimento separado de ventanas. `external` ejecuta por separado el baseline within-session
-70/30 y leave-one-session-out en Zhou2020 y BNCI2014_001, tambien sin ICA. No se añade una
-validacion redundante de cinco folds por sesion. `ica-sensitivity` repite el bloque principal 70/30
-con la politica exploratoria de kurtosis.
+`primary` ejecuta MI-OpenBCI sin ICA, con trials completos, split estratificado 70/30, cinco folds
+within-session, LOSO y el experimento separado de ventanas. `external` ejecuta por separado el
+baseline 70/30 y leave-one-session-out en Zhou2020 y Tavakolan2017, tambien sin ICA.
+`ica-sensitivity` repite el bloque principal 70/30 con la politica exploratoria de kurtosis.
 
-El perfil completo ronda 9.400 entrenamientos, porque cada celda externa contiene un fold por
+El perfil completo contiene 3.350 celdas y ronda 12.150 entrenamientos, porque las celdas
+within-session y externas contienen varios folds. Cada celda externa contiene un fold por
 sesion para within-session y otro para cross-session. Antes de lanzarlo, mida una muestra pequena
 con 3 a 5 epochs en otro directorio y estime el
 tiempo de 300 epochs. Si hay varias GPU o PCs que comparten la carpeta de resultados, divida los
@@ -131,6 +131,8 @@ mucho espacio. Agregue `--save-weights` solo si necesita archivar cada modelo.
 - `results/statistics/completeness.csv`: semillas faltantes; la inferencia se bloquea si falta una.
 - `results/statistics/expected_cell_audit.csv`: producto esperado del perfil; detecta incluso
   modelos, sujetos o condiciones totalmente ausentes.
+- `results/statistics/sample_accounting.csv`: trials, ejemplos, folds y conteos de clase por
+  celda, incluida la multiplicacion producida por ventanas.
 - `results/latency/`: latencia controlada de forward pass.
 
 ## Que significa la latencia
@@ -143,3 +145,5 @@ actuacion. En el paper debe llamarse `model inference latency`, no `BCI response
 
 La especificacion metodologica completa esta en `docs/EXPERIMENT_SPEC.md` y el estado honesto de
 cada observacion de los revisores en `docs/FEEDBACK_COVERAGE.md`.
+La seleccion reproducible de datasets esta en `docs/MOABB_DATASET_INVENTORY.md` y la procedencia de
+las recetas en `docs/HYPERPARAMETER_PROVENANCE.md`.

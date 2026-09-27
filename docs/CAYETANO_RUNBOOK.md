@@ -7,7 +7,8 @@
 3. Activar `deep-eeg-clei`.
 4. Definir `CLEI_DATA_DIR` y `MNE_DATA` como se muestra en el README.
 5. Ejecutar `python scripts/preflight.py --require-cuda`. No continuar si no termina en `preflight=OK`.
-6. Descargar primero los datos con `python scripts/download_moabb.py --datasets Zhou2020 BNCI2014_001`.
+6. Descargar primero los datos con
+   `python scripts/download_moabb.py --datasets Zhou2020 Tavakolan2017`.
 
 ## 2. Piloto temporal separado
 

@@ -9,8 +9,9 @@ El benchmark evalua cinco decoders deep bajo protocolos identicos y separa tres 
 3. Transferencia a sujetos no observados cuando el dataset lo permite.
 
 MI-OpenBCI es el dataset low-cost principal. Zhou2020 aporta una tarea research-grade comparable,
-right-hand motor imagery frente a rest, con siete sesiones. BNCI2014_001 aporta el benchmark
-canonico BCI Competition IV 2a para left-hand frente a right-hand y cross-session. Las diferencias
+right-hand motor imagery frente a rest, con siete sesiones. Tavakolan2017 aporta la misma
+comparacion right-hand frente a rest, cuatro sesiones y una cohorte de 12 sujetos con menor costo
+computacional. Las diferencias
 entre datasets se interpretan como validacion externa contextual, no como efectos causales del
 hardware.
 
@@ -76,7 +77,8 @@ Metrica primaria: accuracy. Metrica secundaria: Cohen's kappa.
 Dentro de cada familia dataset, protocolo y metrica se comparan los diez pares de modelos mediante
 Wilcoxon bilateral y correccion de Holm. Los intervalos del 95 por ciento para medias y diferencias
 pareadas usan la distribucion t de Student, sin bootstrap. La variabilidad entre sujetos y la
-variabilidad entre semillas se informan por separado.
+variabilidad entre semillas se informan por separado. Cada contraste incluye la correlacion
+rank-biserial pareada, cuyo signo sigue la diferencia indicada en la tabla.
 
 La augmentacion usa Wilcoxon pareado sobre deltas por sujeto promediados entre semillas. La familia
 de Holm contiene las comparaciones `overlap-center` y `nonoverlap-center` de los cinco modelos.
@@ -86,7 +88,7 @@ de Holm contiene las comparaciones `overlap-center` y `nonoverlap-center` de los
 - Multisemilla: cerrado cuando existen cinco semillas completas por celda primaria.
 - Estadistica: cerrado cuando se generan tablas Wilcoxon-Holm e IC con sujeto como unidad.
 - Fairness: cerrado cuando todos los modelos reciben identico soporte temporal y augmentacion.
-- Cross-session: cerrado cuando BNCI2014_001 y Zhou2020 terminan leave-one-session-out.
+- Cross-session: cerrado cuando Tavakolan2017 y Zhou2020 terminan leave-one-session-out.
 - ICA: parcialmente cerrado. El primario no usa ICA; la sensibilidad por kurtosis es auditable,
   pero no identifica la fisiologia del componente.
 - Latencia: cerrado cuando todos los modelos se perfilan en el mismo dispositivo, input y batch.
