@@ -204,6 +204,47 @@ def test_malformed_cell_is_not_silently_ignored(tmp_path) -> None:
         load_cells(cells)
 
 
+def test_nonfinite_metric_is_rejected_before_inference(tmp_path) -> None:
+    import json
+
+    cells = tmp_path / "cells"
+    cells.mkdir()
+    payload = {
+        "dataset": "D",
+        "task": "binary",
+        "protocol": "within_split",
+        "condition": "full",
+        "ica_policy": "none",
+        "model": "EEGNet",
+        "subject": "1",
+        "seed": 0,
+        "metrics": {"accuracy": float("nan"), "kappa": 0.0},
+        "run_configuration": {
+            "schema_version": 2,
+            "code_sha256": "abc",
+            "epochs": 300,
+            "split_seed": 2026,
+            "device_type": "cuda",
+            "hardware": "GPU",
+            "deterministic_policy": "torch_deterministic_warn_only_cudnn_deterministic",
+            "environment_sha256": "env-a",
+            "environment_versions": {"python": "3.11"},
+            "data_sha256": "data-a",
+            "recipe": {"optimizer": "adamw"},
+        },
+    }
+    (cells / "nan.json").write_text(json.dumps(payload), encoding="utf-8")
+    with pytest.raises(ValueError, match="Non-finite metric"):
+        load_cells(cells)
+
+
+def test_paired_model_tests_reject_nonfinite_values() -> None:
+    frame = _frame()
+    frame.loc[frame.index[0], "value"] = np.nan
+    with pytest.raises(ValueError, match="Non-finite metric"):
+        paired_model_tests(frame)
+
+
 def test_mixed_code_versions_across_subjects_block_analysis(tmp_path) -> None:
     import copy
     import json

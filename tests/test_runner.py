@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import pytest
 
+import deepbench.runner as runner
 from deepbench.runner import _environment_identity, _run_identity, run_job
 
 
@@ -38,9 +39,52 @@ def test_run_fingerprint_changes_with_data_or_environment() -> None:
 def test_environment_identity_records_scientific_dependencies() -> None:
     digest, versions = _environment_identity()
     assert len(digest) == 64
-    assert {"python", "torch", "braindecode", "moabb", "mne", "numpy", "scipy"} <= set(
-        versions
+    assert {
+        "python",
+        "torch",
+        "braindecode",
+        "moabb",
+        "mne",
+        "numpy",
+        "scipy",
+        "BCI2kReader",
+    } <= set(versions)
+
+
+def test_git_revision_is_metadata_not_part_of_operational_fingerprint(monkeypatch) -> None:
+    monkeypatch.setattr(runner, "_git_revision", lambda: "revision-a")
+    fingerprint_a, configuration_a = runner._run_identity(
+        dataset="MI-OpenBCI",
+        protocol="within_split",
+        condition="full",
+        model="EEGNet",
+        seed=0,
+        subject="S02",
+        ica_policy="none",
+        epochs=300,
+        device="cpu",
+        save_weights=False,
+        data_sha256="data-a",
+        environment_sha256="env-a",
     )
+    monkeypatch.setattr(runner, "_git_revision", lambda: "revision-b")
+    fingerprint_b, configuration_b = runner._run_identity(
+        dataset="MI-OpenBCI",
+        protocol="within_split",
+        condition="full",
+        model="EEGNet",
+        seed=0,
+        subject="S02",
+        ica_policy="none",
+        epochs=300,
+        device="cpu",
+        save_weights=False,
+        data_sha256="data-a",
+        environment_sha256="env-a",
+    )
+    assert configuration_a["git_revision"] == "revision-a"
+    assert configuration_b["git_revision"] == "revision-b"
+    assert fingerprint_a == fingerprint_b
 
 
 def test_loso_rejects_single_subject_before_loading_data(tmp_path) -> None:
