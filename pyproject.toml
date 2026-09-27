@@ -8,6 +8,7 @@ version = "0.1.0"
 description = "Reproducible multi-dataset deep-learning benchmark for motor-imagery EEG"
 requires-python = ">=3.11,<3.15"
 dependencies = [
+  "BCI2kReader @ git+https://github.com/neurotechcenter/BCI2kReader.git@9e8ecc3fcde58d2b41c2d2fcd8d23d88b412c08d",
   "braindecode==1.5.2",
   "matplotlib>=3.9",
   "mne==1.12.1",

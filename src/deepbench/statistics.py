@@ -80,11 +80,14 @@ def load_cells(cells_dir: Path) -> pd.DataFrame:
             raise ValueError(f"Malformed result cell: {path}")
         payloads.append(payload)
         for metric, value in payload["metrics"].items():
+            numeric_value = float(value)
+            if not np.isfinite(numeric_value):
+                raise ValueError(f"Non-finite metric {metric!r} in result cell: {path}")
             rows.append(
                 {
                     **{key: payload[key] for key in CELL_KEYS},
                     "metric": str(metric),
-                    "value": float(value),
+                    "value": numeric_value,
                     "source": str(path),
                 }
             )
@@ -116,9 +119,11 @@ def mean_ci(values: np.ndarray, confidence: float = 0.95) -> tuple[float, float,
 
 def _wilcoxon_pvalue(differences: np.ndarray) -> float:
     differences = np.asarray(differences, dtype=float)
+    if not np.isfinite(differences).all():
+        raise ValueError("Non-finite metric difference passed to paired Wilcoxon test")
     if np.allclose(differences, 0.0):
         return 1.0
-    return float(
+    p_value = float(
         scipy.stats.wilcoxon(
             differences,
             alternative="two-sided",
@@ -126,6 +131,21 @@ def _wilcoxon_pvalue(differences: np.ndarray) -> float:
             method="auto",
         ).pvalue
     )
+    if not np.isfinite(p_value) or not 0.0 <= p_value <= 1.0:
+        raise ValueError(f"Invalid Wilcoxon p-value: {p_value}")
+    return p_value
+
+
+def _holm_adjust(records: list[dict[str, object]]) -> None:
+    p_values = np.asarray([record["p_raw"] for record in records], dtype=float)
+    if not np.isfinite(p_values).all() or np.any((p_values < 0.0) | (p_values > 1.0)):
+        raise ValueError(f"Invalid p-values before Holm correction: {p_values.tolist()}")
+    adjusted = multipletests(p_values, method="holm")
+    for record, reject, p_adjusted in zip(records, adjusted[0], adjusted[1], strict=True):
+        if not np.isfinite(p_adjusted):
+            raise ValueError(f"Invalid Holm-adjusted p-value: {p_adjusted}")
+        record["p_holm"] = float(p_adjusted)
+        record["reject_holm_0_05"] = bool(reject)
 
 
 def paired_rank_biserial(differences: np.ndarray) -> float:
@@ -142,6 +162,8 @@ def paired_rank_biserial(differences: np.ndarray) -> float:
 
 def aggregate_seeds(frame: pd.DataFrame) -> pd.DataFrame:
     """Average optimization repeats inside each subject before any inference."""
+    if not np.isfinite(frame["value"].to_numpy(dtype=float)).all():
+        raise ValueError("Non-finite metric value found before seed aggregation")
     keys = [key for key in CELL_KEYS if key != "seed"] + ["metric"]
     return frame.groupby(keys, as_index=False, observed=True)["value"].mean()
 
@@ -231,12 +253,7 @@ def paired_model_tests(frame: pd.DataFrame) -> pd.DataFrame:
                 }
             )
         if family_records:
-            adjusted = multipletests([record["p_raw"] for record in family_records], method="holm")
-            for record, reject, p_adjusted in zip(
-                family_records, adjusted[0], adjusted[1], strict=True
-            ):
-                record["p_holm"] = float(p_adjusted)
-                record["reject_holm_0_05"] = bool(reject)
+            _holm_adjust(family_records)
             records.extend(family_records)
     return pd.DataFrame(records)
 
@@ -287,12 +304,7 @@ def augmentation_tests(frame: pd.DataFrame) -> pd.DataFrame:
                     }
                 )
         if family_records:
-            adjusted = multipletests([record["p_raw"] for record in family_records], method="holm")
-            for record, reject, p_adjusted in zip(
-                family_records, adjusted[0], adjusted[1], strict=True
-            ):
-                record["p_holm"] = float(p_adjusted)
-                record["reject_holm_0_05"] = bool(reject)
+            _holm_adjust(family_records)
             records.extend(family_records)
     return pd.DataFrame(records)
 

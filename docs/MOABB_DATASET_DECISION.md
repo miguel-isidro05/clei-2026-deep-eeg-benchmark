@@ -21,9 +21,15 @@ perfil confirmatorio porque no contiene `rest`; reducir sus cuatro clases a left
 contestaria otra pregunta. Ninguna diferencia entre datasets se atribuye causalmente al costo del
 hardware.
 
+MOABB 1.5.0 requiere BCI2kReader para leer los archivos BCI2000 de Tavakolan2017. La dependencia
+se instala desde el repositorio oficial fijado al commit
+`9e8ecc3fcde58d2b41c2d2fcd8d23d88b412c08d`; el preflight comprueba el import antes de iniciar
+la corrida.
+
 Fuentes oficiales:
 
 - MOABB y ejemplo oficial de `CrossSessionEvaluation`: https://github.com/NeuroTechX/moabb
 - Implementacion de Zhou2020: https://github.com/NeuroTechX/moabb/blob/develop/moabb/datasets/zhou2020.py
+- Lector oficial BCI2kReader: https://github.com/neurotechcenter/BCI2kReader
 - Documentacion de AlexMI: https://moabb.neurotechx.com/docs/generated/moabb.datasets.AlexMI.html
 - EEGInceptionMI en Braindecode: https://github.com/braindecode/braindecode/blob/master/braindecode/models/eeginception_mi.py

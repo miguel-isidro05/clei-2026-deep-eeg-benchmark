@@ -31,4 +31,8 @@ restringieron a la banda común porque el preprocessing ya elimina frecuencias f
 
 La receta completa se serializa dentro de cada celda. El fingerprint incluye la receta, el código,
 las versiones del stack científico y el SHA-256 de los arrays estandarizados consumidos por cada
-sujeto o cohorte LOSO.
+sujeto o cohorte LOSO. Para dependencias instaladas desde un repositorio, también incorpora el
+contenido de `direct_url.json`; por tanto, Tavakolan2017 registra el commit exacto de
+BCI2kReader y no solo su versión declarada `0.31.dev0`. La revisión Git del benchmark se conserva
+como metadato de auditoría, pero se excluye del hash operativo: un commit que solo cambie
+documentación no invalida celdas cuyos código, datos, entorno y receta permanecen idénticos.

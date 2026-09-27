@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import importlib.util
 import json
 import os
 from pathlib import Path
@@ -19,6 +20,15 @@ from .config import (
     resolve_mi_data_dir,
 )
 from .types import SubjectRecording
+
+
+def validate_dataset_dependencies(dataset_name: str) -> None:
+    """Fail before download/training when a dataset-specific reader is unavailable."""
+    if dataset_name == "Tavakolan2017" and importlib.util.find_spec("BCI2kReader") is None:
+        raise RuntimeError(
+            "Tavakolan2017 requires BCI2kReader. Reinstall the pinned project environment "
+            "with `python -m pip install -e '.[dev]'`."
+        )
 
 
 def _recording_sha256(
@@ -148,6 +158,7 @@ def load_moabb_subject(dataset_name: str, subject: str) -> SubjectRecording:
     """Load one binary MOABB subject with session metadata and common filtering."""
     if dataset_name not in DATASET_SPECS or dataset_name == "MI-OpenBCI":
         raise ValueError(f"Not a configured MOABB dataset: {dataset_name}")
+    validate_dataset_dependencies(dataset_name)
     os.environ.setdefault("MNE_DONTWRITE_HOME", "true")
     from moabb.paradigms import MotorImagery
 

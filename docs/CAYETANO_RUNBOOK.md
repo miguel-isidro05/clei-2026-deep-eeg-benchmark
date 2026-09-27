@@ -10,6 +10,11 @@
 6. Descargar primero los datos con
    `python scripts/download_moabb.py --datasets Zhou2020 Tavakolan2017`.
 
+`Tavakolan2017` usa el lector BCI2000 que MOABB importa de forma opcional. El proyecto lo fija a
+un commit exacto de su repositorio oficial y `preflight.py` comprueba su presencia antes de
+descargar o entrenar. Si el entorno ya existia, actualicelo con
+`python -m pip install -e '.[dev]'`.
+
 ## 2. Piloto temporal separado
 
 Use otro directorio para que el piloto nunca se mezcle con el paper:

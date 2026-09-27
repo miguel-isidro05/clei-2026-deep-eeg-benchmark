@@ -92,11 +92,14 @@ baseline 70/30 y leave-one-session-out en Zhou2020 y Tavakolan2017, tambien sin 
 `ica-sensitivity` repite el bloque principal 70/30 con la politica exploratoria de kurtosis.
 
 El perfil completo contiene 3.350 celdas y ronda 12.150 entrenamientos, porque las celdas
-within-session y externas contienen varios folds. Cada celda externa contiene un fold por
-sesion para within-session y otro para cross-session. Antes de lanzarlo, mida una muestra pequena
-con 3 a 5 epochs en otro directorio y estime el
+within-session y cross-session contienen varios folds. Cada celda externa contiene un baseline
+`within_split` y un fold por sesion retenida para `cross_session`; `within_session` de cinco folds
+se ejecuta en MI-OpenBCI. Antes de lanzarlo, mida una muestra pequena con 3 a 5 epochs en otro
+directorio y estime el
 tiempo de 300 epochs. Si hay varias GPU o PCs que comparten la carpeta de resultados, divida los
-sujetos sin solaparlos:
+sujetos sin solaparlos solo cuando todas usan la misma version del codigo, entorno, tipo de
+dispositivo y modelo de GPU. No combine hardware heterogeneo en una misma corrida confirmatoria:
+la validacion estadistica lo rechazara.
 
 ```bash
 # Proceso/GPU 0

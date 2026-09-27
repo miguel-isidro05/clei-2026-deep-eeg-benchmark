@@ -16,6 +16,7 @@ from deepbench.config import (
     TRIAL_SAMPLES,
     resolve_mi_data_dir,
 )
+from deepbench.datasets import validate_dataset_dependencies
 from deepbench.models import make_module, parameter_count
 from deepbench.reproducibility import get_device
 
@@ -29,7 +30,16 @@ def main() -> None:
     print(f"device={get_device()} torch={torch.__version__}")
     if torch.cuda.is_available():
         print(f"cuda_device={torch.cuda.get_device_name(0)}")
-    for package in ("braindecode", "moabb", "mne", "skorch", "scipy", "statsmodels"):
+    validate_dataset_dependencies("Tavakolan2017")
+    for package in (
+        "braindecode",
+        "moabb",
+        "mne",
+        "skorch",
+        "scipy",
+        "statsmodels",
+        "BCI2kReader",
+    ):
         print(f"{package}={importlib.metadata.version(package)}")
     data_dir = resolve_mi_data_dir()
     missing = [subject for subject in MI_SUBJECTS if not (data_dir / f"{subject}.mat").exists()]

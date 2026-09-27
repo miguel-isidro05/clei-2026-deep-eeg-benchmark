@@ -30,6 +30,7 @@ SCIENTIFIC_PACKAGES = (
     "scikit-learn",
     "skorch",
     "statsmodels",
+    "BCI2kReader",
 )
 
 
@@ -70,9 +71,17 @@ def _environment_identity() -> tuple[str, dict[str, str | None]]:
     versions: dict[str, str | None] = {"python": platform.python_version()}
     for package in SCIENTIFIC_PACKAGES:
         try:
-            versions[package] = importlib.metadata.version(package)
+            distribution = importlib.metadata.distribution(package)
+            versions[package] = distribution.version
+            direct_url = distribution.read_text("direct_url.json")
+            versions[f"{package}_direct_url"] = (
+                json.dumps(json.loads(direct_url), sort_keys=True, separators=(",", ":"))
+                if direct_url
+                else None
+            )
         except importlib.metadata.PackageNotFoundError:
             versions[package] = None
+            versions[f"{package}_direct_url"] = None
     canonical = json.dumps(versions, sort_keys=True, separators=(",", ":"))
     return hashlib.sha256(canonical.encode()).hexdigest(), versions
 
@@ -127,7 +136,10 @@ def _run_identity(
         "save_weights": save_weights,
         "recipe": recipe_dict(model, epochs),
     }
-    canonical = json.dumps(configuration, sort_keys=True, separators=(",", ":"))
+    operational_configuration = {
+        key: value for key, value in configuration.items() if key != "git_revision"
+    }
+    canonical = json.dumps(operational_configuration, sort_keys=True, separators=(",", ":"))
     return hashlib.sha256(canonical.encode()).hexdigest(), configuration
 
 
