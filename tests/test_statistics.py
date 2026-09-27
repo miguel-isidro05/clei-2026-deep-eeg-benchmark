@@ -132,6 +132,8 @@ def test_incomplete_seed_grid_blocks_inferential_outputs(tmp_path) -> None:
             "device_type": "cuda",
             "hardware": "GPU",
             "deterministic_policy": "torch_deterministic_warn_only_cudnn_deterministic",
+            "environment_sha256": "env-a",
+            "data_sha256": "data-a",
             "recipe": {"optimizer": "adamw"},
         },
     }
@@ -173,6 +175,8 @@ def test_missing_expected_group_forces_exploratory_outputs(tmp_path) -> None:
                 "device_type": "cuda",
                 "hardware": "GPU",
                 "deterministic_policy": "torch_deterministic_warn_only_cudnn_deterministic",
+                "environment_sha256": "env-a",
+                "data_sha256": "data-a",
                 "recipe": {"optimizer": "adamw"},
             },
         }
@@ -220,6 +224,8 @@ def test_mixed_code_versions_across_subjects_block_analysis(tmp_path) -> None:
             "device_type": "cuda",
             "hardware": "GPU",
             "deterministic_policy": "torch_deterministic_warn_only_cudnn_deterministic",
+            "environment_sha256": "env-a",
+            "data_sha256": "data-a",
             "recipe": {"optimizer": "adamw"},
         },
     }

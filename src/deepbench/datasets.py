@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import hashlib
+import json
 import os
 from pathlib import Path
 
@@ -17,6 +19,29 @@ from .config import (
     resolve_mi_data_dir,
 )
 from .types import SubjectRecording
+
+
+def _recording_sha256(
+    x: np.ndarray,
+    y: np.ndarray,
+    sessions: np.ndarray,
+    *,
+    sfreq: float,
+    ch_names: tuple[str, ...],
+) -> str:
+    """Fingerprint the exact standardized arrays consumed by the benchmark."""
+    digest = hashlib.sha256()
+    metadata = {
+        "shape": list(x.shape),
+        "dtype": str(x.dtype),
+        "sfreq": float(sfreq),
+        "ch_names": list(ch_names),
+        "sessions": [str(value) for value in sessions],
+    }
+    digest.update(json.dumps(metadata, sort_keys=True, separators=(",", ":")).encode())
+    digest.update(np.ascontiguousarray(y, dtype=np.int64).tobytes())
+    digest.update(np.ascontiguousarray(x, dtype=np.float32).tobytes())
+    return digest.hexdigest()
 
 
 def _crop_or_pad(x: np.ndarray, target_samples: int) -> np.ndarray:
@@ -76,15 +101,20 @@ def load_mi_openbci_subject(subject: str) -> SubjectRecording:
     y = np.where(raw_y == 1, 1, np.where(raw_y == 2, 0, -1)).astype(np.int64)
     if np.any(y < 0):
         raise ValueError(f"Unexpected MI-OpenBCI labels: {np.unique(raw_y)}")
+    sessions = np.full(len(y), "session_0", dtype=object)
+    channels = MI_CHANNELS
     recording = SubjectRecording(
         dataset="MI-OpenBCI",
         subject=subject,
         x=x,
         y=y,
-        sessions=np.full(len(y), "session_0", dtype=object),
+        sessions=sessions,
         sfreq=TARGET_SFREQ,
-        ch_names=MI_CHANNELS,
+        ch_names=channels,
         task=DATASET_SPECS["MI-OpenBCI"].task,
+        data_sha256=_recording_sha256(
+            x, y, sessions, sfreq=TARGET_SFREQ, ch_names=channels
+        ),
     )
     recording.validate()
     return recording
@@ -92,11 +122,12 @@ def load_mi_openbci_subject(subject: str) -> SubjectRecording:
 
 def _make_moabb_dataset(name: str):
     os.environ.setdefault("MNE_DONTWRITE_HOME", "true")
-    from moabb.datasets import BNCI2014_001, AlexMI, Zhou2020
+    from moabb.datasets import BNCI2014_001, AlexMI, Tavakolan2017, Zhou2020
 
     constructors = {
         "AlexMI": AlexMI,
         "BNCI2014_001": BNCI2014_001,
+        "Tavakolan2017": Tavakolan2017,
         "Zhou2020": Zhou2020,
     }
     try:
@@ -147,6 +178,7 @@ def load_moabb_subject(dataset_name: str, subject: str) -> SubjectRecording:
     event_to_binary = {spec.events[0]: 0, spec.events[1]: 1}
     y = np.asarray([event_to_binary[str(label)] for label in labels], dtype=np.int64)
     sessions = metadata["session"].astype(str).to_numpy()
+    ch_names = tuple(epochs.ch_names)
     recording = SubjectRecording(
         dataset=dataset_name,
         subject=str(subject),
@@ -154,8 +186,9 @@ def load_moabb_subject(dataset_name: str, subject: str) -> SubjectRecording:
         y=y,
         sessions=sessions,
         sfreq=TARGET_SFREQ,
-        ch_names=tuple(epochs.ch_names),
+        ch_names=ch_names,
         task=spec.task,
+        data_sha256=_recording_sha256(x, y, sessions, sfreq=TARGET_SFREQ, ch_names=ch_names),
     )
     recording.validate()
     return recording

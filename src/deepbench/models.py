@@ -21,18 +21,30 @@ from .reproducibility import set_seeds
 class TrainingRecipe:
     lr: float
     optimizer: str
+    provenance_id: str
     weight_decay: float = 0.0
     batch_size: int = 64
     epochs: int = 300
     betas: tuple[float, float] = (0.9, 0.999)
+    selection_policy: str = "predeclared_no_test_tuning"
 
 
 TRAINING_RECIPES: dict[str, TrainingRecipe] = {
-    "EEGNet": TrainingRecipe(lr=6.25e-4, optimizer="adamw"),
-    "FBCNet": TrainingRecipe(lr=6.25e-4, optimizer="adamw"),
-    "ShallowConvNet": TrainingRecipe(lr=6.25e-4, optimizer="adamw"),
-    "EEGConformer": TrainingRecipe(lr=5e-5, optimizer="adam"),
-    "EEGInceptionMI": TrainingRecipe(lr=1e-3, optimizer="adam"),
+    "EEGNet": TrainingRecipe(
+        lr=6.25e-4, optimizer="adamw", provenance_id="miccai_fixed_convergence_v1"
+    ),
+    "FBCNet": TrainingRecipe(
+        lr=6.25e-4, optimizer="adamw", provenance_id="shared_fixed_convergence_v1"
+    ),
+    "ShallowConvNet": TrainingRecipe(
+        lr=6.25e-4, optimizer="adamw", provenance_id="shared_fixed_convergence_v1"
+    ),
+    "EEGConformer": TrainingRecipe(
+        lr=5e-5, optimizer="adam", provenance_id="project_predeclared_conformer_v1"
+    ),
+    "EEGInceptionMI": TrainingRecipe(
+        lr=1e-3, optimizer="adam", provenance_id="project_predeclared_inception_v1"
+    ),
 }
 
 

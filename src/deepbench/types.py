@@ -20,6 +20,7 @@ class SubjectRecording:
     sfreq: float
     ch_names: tuple[str, ...]
     task: str
+    data_sha256: str | None = None
 
     def validate(self) -> None:
         """Raise a descriptive error when a loader violates the common contract."""

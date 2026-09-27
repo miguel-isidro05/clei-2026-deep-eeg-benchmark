@@ -32,12 +32,14 @@ GLOBAL_COMPATIBILITY_KEYS = (
     "device_type",
     "hardware",
     "deterministic_policy",
+    "environment_sha256",
 )
 
 
 def _validate_run_configurations(payloads: list[dict[str, object]]) -> None:
     global_signatures: set[tuple[object, ...]] = set()
     recipes_by_model: dict[str, set[str]] = {}
+    data_by_subject: dict[tuple[str, str, str], set[str]] = {}
     for payload in payloads:
         configuration = payload.get("run_configuration")
         if not isinstance(configuration, dict):
@@ -49,6 +51,8 @@ def _validate_run_configurations(payloads: list[dict[str, object]]) -> None:
         model = str(payload["model"])
         recipe = json.dumps(configuration.get("recipe"), sort_keys=True)
         recipes_by_model.setdefault(model, set()).add(recipe)
+        data_key = (str(payload["dataset"]), str(payload["protocol"]), str(payload["subject"]))
+        data_by_subject.setdefault(data_key, set()).add(str(configuration.get("data_sha256")))
     if len(global_signatures) != 1:
         raise ValueError(
             "Incompatible result cells: code, epochs, split seed, hardware, device type, or "
@@ -57,6 +61,9 @@ def _validate_run_configurations(payloads: list[dict[str, object]]) -> None:
     inconsistent_models = [model for model, recipes in recipes_by_model.items() if len(recipes) > 1]
     if inconsistent_models:
         raise ValueError(f"Incompatible training recipes for models: {inconsistent_models}")
+    inconsistent_data = [key for key, identities in data_by_subject.items() if len(identities) > 1]
+    if inconsistent_data:
+        raise ValueError(f"Incompatible data identities for cells: {inconsistent_data}")
 
 
 def load_cells(cells_dir: Path) -> pd.DataFrame:
@@ -115,6 +122,18 @@ def _wilcoxon_pvalue(differences: np.ndarray) -> float:
             method="auto",
         ).pvalue
     )
+
+
+def paired_rank_biserial(differences: np.ndarray) -> float:
+    """Return paired rank-biserial correlation with the sign of the stated difference."""
+    clean = np.asarray(differences, dtype=float)
+    clean = clean[np.isfinite(clean) & ~np.isclose(clean, 0.0)]
+    if clean.size == 0:
+        return 0.0
+    ranks = scipy.stats.rankdata(np.abs(clean), method="average")
+    positive = float(ranks[clean > 0].sum())
+    negative = float(ranks[clean < 0].sum())
+    return (positive - negative) / (positive + negative)
 
 
 def aggregate_seeds(frame: pd.DataFrame) -> pd.DataFrame:
@@ -203,6 +222,7 @@ def paired_model_tests(frame: pd.DataFrame) -> pd.DataFrame:
                     "median_difference_a_minus_b": float(np.median(differences)),
                     "difference_ci95_low": low,
                     "difference_ci95_high": high,
+                    "rank_biserial_a_minus_b": paired_rank_biserial(differences),
                     "p_raw": _wilcoxon_pvalue(differences),
                 }
             )
@@ -256,6 +276,9 @@ def augmentation_tests(frame: pd.DataFrame) -> pd.DataFrame:
                         "mean_difference": mean,
                         "difference_ci95_low": low,
                         "difference_ci95_high": high,
+                        "rank_biserial_augmented_minus_center": paired_rank_biserial(
+                            differences.to_numpy()
+                        ),
                         "p_raw": _wilcoxon_pvalue(differences.to_numpy()),
                     }
                 )
@@ -267,6 +290,42 @@ def augmentation_tests(frame: pd.DataFrame) -> pd.DataFrame:
                 record["p_holm"] = float(p_adjusted)
                 record["reject_holm_0_05"] = bool(reject)
             records.extend(family_records)
+    return pd.DataFrame(records)
+
+
+def sample_accounting_table(payloads: list[dict[str, object]]) -> pd.DataFrame:
+    """Flatten fold-level trial, example, and class counts for audit and reporting."""
+    records: list[dict[str, object]] = []
+    identity_keys = [
+        "dataset",
+        "task",
+        "protocol",
+        "condition",
+        "ica_policy",
+        "model",
+        "subject",
+        "seed",
+    ]
+    for payload in payloads:
+        identity = {key: payload[key] for key in identity_keys}
+        for fold_index, report in enumerate(payload.get("fold_reports", [])):
+            train_counts = report.get("train_class_counts", {})
+            test_counts = report.get("test_class_counts", {})
+            records.append(
+                {
+                    **identity,
+                    "fold_index": fold_index,
+                    "session": report.get("session"),
+                    "held_session": report.get("held_session"),
+                    "n_train_trials": report.get("n_train_trials"),
+                    "n_train_examples": report.get("n_train_examples"),
+                    "n_test_trials": report.get("n_test_trials"),
+                    "train_class_0": train_counts.get("0"),
+                    "train_class_1": train_counts.get("1"),
+                    "test_class_0": test_counts.get("0"),
+                    "test_class_1": test_counts.get("1"),
+                }
+            )
     return pd.DataFrame(records)
 
 
@@ -288,6 +347,9 @@ def write_statistics(
     outputs = {
         "all_seed_metrics.csv": frame,
         "descriptive_subject_seed_variability.csv": descriptive_table(frame),
+        "sample_accounting.csv": sample_accounting_table(
+            [json.loads(path.read_text(encoding="utf-8")) for path in sorted(cells_dir.glob("*.json"))]
+        ),
     }
     if incomplete:
         (output_dir / "INCOMPLETE_EXPLORATORY_ONLY.txt").write_text(

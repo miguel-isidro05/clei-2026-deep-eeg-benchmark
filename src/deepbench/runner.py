@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import importlib.metadata
 import json
 import platform
 import subprocess
@@ -19,6 +20,17 @@ from .io import read_json, write_json_atomic
 from .models import recipe_dict
 
 RUN_SCHEMA_VERSION = 1
+SCIENTIFIC_PACKAGES = (
+    "torch",
+    "braindecode",
+    "moabb",
+    "mne",
+    "numpy",
+    "scipy",
+    "scikit-learn",
+    "skorch",
+    "statsmodels",
+)
 
 
 @lru_cache(maxsize=1)
@@ -52,6 +64,30 @@ def _hardware_identity(device: str) -> str:
     return platform.processor() or platform.machine()
 
 
+@lru_cache(maxsize=1)
+def _environment_identity() -> tuple[str, dict[str, str | None]]:
+    """Fingerprint versions that can change numerical results."""
+    versions: dict[str, str | None] = {"python": platform.python_version()}
+    for package in SCIENTIFIC_PACKAGES:
+        try:
+            versions[package] = importlib.metadata.version(package)
+        except importlib.metadata.PackageNotFoundError:
+            versions[package] = None
+    canonical = json.dumps(versions, sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(canonical.encode()).hexdigest(), versions
+
+
+def _cohort_data_identity(recordings: dict[str, object]) -> str:
+    identities = {
+        subject: getattr(recording, "data_sha256", None)
+        for subject, recording in sorted(recordings.items())
+    }
+    if any(value is None for value in identities.values()):
+        raise ValueError("Every loaded recording must contain data_sha256")
+    canonical = json.dumps(identities, sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(canonical.encode()).hexdigest()
+
+
 def _run_identity(
     *,
     dataset: str,
@@ -64,6 +100,9 @@ def _run_identity(
     epochs: int,
     device: str,
     save_weights: bool,
+    data_sha256: str,
+    environment_sha256: str,
+    environment_versions: dict[str, str | None] | None = None,
 ) -> tuple[str, dict[str, object]]:
     configuration = {
         "schema_version": RUN_SCHEMA_VERSION,
@@ -82,6 +121,9 @@ def _run_identity(
         "device_type": device.split(":", maxsplit=1)[0],
         "hardware": _hardware_identity(device),
         "deterministic_policy": "torch_deterministic_warn_only_cudnn_deterministic",
+        "environment_sha256": environment_sha256,
+        "environment_versions": environment_versions,
+        "data_sha256": data_sha256,
         "save_weights": save_weights,
         "recipe": recipe_dict(model, epochs),
     }
@@ -131,6 +173,7 @@ def run_job(
     completed = 0
     skipped = 0
     checkpoint_dir = output_dir / "checkpoints" if save_weights else None
+    environment_sha256, environment_versions = _environment_identity()
     if "loso" in protocols:
         recordings = {subject: load_subject(dataset, subject) for subject in selected_subjects}
     else:
@@ -140,6 +183,17 @@ def run_job(
             for model in models:
                 for seed in seeds:
                     for subject in selected_subjects:
+                        if subject not in recordings:
+                            recordings[subject] = load_subject(dataset, subject)
+                        recording = recordings[subject]
+                        if protocol == "loso":
+                            data_sha256 = _cohort_data_identity(recordings)
+                        else:
+                            if recording.data_sha256 is None:
+                                raise ValueError(
+                                    f"{dataset}/{subject} does not provide a data fingerprint"
+                                )
+                            data_sha256 = recording.data_sha256
                         destination = cell_path(
                             output_dir,
                             dataset,
@@ -161,6 +215,9 @@ def run_job(
                             epochs=epochs,
                             device=device,
                             save_weights=save_weights,
+                            data_sha256=data_sha256,
+                            environment_sha256=environment_sha256,
+                            environment_versions=environment_versions,
                         )
                         if destination.exists() and not overwrite:
                             previous = read_json(destination)
@@ -185,9 +242,6 @@ def run_job(
                                 checkpoint_dir=checkpoint_dir,
                             )
                         else:
-                            if subject not in recordings:
-                                recordings[subject] = load_subject(dataset, subject)
-                            recording = recordings[subject]
                             result = run_subject_cell(
                                 recording,
                                 model,

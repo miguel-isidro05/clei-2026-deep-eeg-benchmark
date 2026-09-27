@@ -21,6 +21,10 @@ def _index_hash(indices: np.ndarray) -> str:
     return hashlib.sha256(np.asarray(indices, dtype=np.int64).tobytes()).hexdigest()
 
 
+def _class_counts(labels: np.ndarray) -> dict[str, int]:
+    return {str(label): int(np.sum(labels == label)) for label in (0, 1)}
+
+
 def _protocol_splits(
     recording: SubjectRecording, protocol: str, seed: int
 ) -> list[tuple[np.ndarray, np.ndarray, dict[str, object]]]:
@@ -166,6 +170,8 @@ def _fit_fold(
         "n_train_trials": int(len(train_indices)),
         "n_train_examples": int(len(x_train)),
         "n_test_trials": int(len(test_indices)),
+        "train_class_counts": _class_counts(recording.y[train_indices]),
+        "test_class_counts": _class_counts(recording.y[test_indices]),
         "training_history": training_history,
     }
     return recording.y[test_indices], y_pred, y_score, len(x_train), report

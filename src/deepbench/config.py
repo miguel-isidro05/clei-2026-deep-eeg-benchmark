@@ -83,6 +83,14 @@ DATASET_SPECS: dict[str, DatasetSpec] = {
         paper_role="research_grade_task_matched",
         multi_session=True,
     ),
+    "Tavakolan2017": DatasetSpec(
+        name="Tavakolan2017",
+        task="right_hand_vs_rest",
+        events=("rest", "right_hand"),
+        paper_role="research_grade_task_matched_compact",
+        multi_session=True,
+        trial_seconds=3.0,
+    ),
     "BNCI2014_001": DatasetSpec(
         name="BNCI2014_001",
         task="left_hand_vs_right_hand",

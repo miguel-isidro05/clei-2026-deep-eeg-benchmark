@@ -9,6 +9,7 @@ from pathlib import Path
 from deepbench.config import MODEL_NAMES, PAPER_SEEDS, RESULTS_DIR
 from deepbench.datasets import available_subjects
 from deepbench.io import write_json_atomic
+from deepbench.paper_profile import paper_blocks
 from deepbench.reproducibility import configure_determinism, get_device, write_manifest
 from deepbench.runner import cell_path, run_job
 
@@ -66,43 +67,7 @@ def main() -> None:
         "overwrite": False,
         "save_weights": args.save_weights,
     }
-    blocks: list[dict[str, object]] = []
-    if args.phase in {"primary", "all"}:
-        blocks.extend(
-            [
-                {
-                    "dataset": "MI-OpenBCI",
-                    "protocols": ["within_split", "loso"],
-                    "conditions": ["full"],
-                    "ica_policy": "none",
-                },
-                {
-                    "dataset": "MI-OpenBCI",
-                    "protocols": ["within_split"],
-                    "conditions": ["center", "nonoverlap", "overlap"],
-                    "ica_policy": "none",
-                },
-            ]
-        )
-    if args.phase in {"external", "all"}:
-        blocks.extend(
-            {
-                "dataset": dataset,
-                "protocols": ["within_split", "cross_session"],
-                "conditions": ["full"],
-                "ica_policy": "none",
-            }
-            for dataset in ("Zhou2020", "BNCI2014_001")
-        )
-    if args.phase in {"ica-sensitivity", "all"}:
-        blocks.append(
-            {
-                "dataset": "MI-OpenBCI",
-                "protocols": ["within_split"],
-                "conditions": ["full"],
-                "ica_policy": "kurtosis",
-            }
-        )
+    blocks = paper_blocks(args.phase)
     expected_cells = []
     selected_subjects: dict[str, list[str]] = {}
     all_subjects: dict[str, list[str]] = {}
