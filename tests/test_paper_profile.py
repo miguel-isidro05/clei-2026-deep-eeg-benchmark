@@ -14,4 +14,3 @@ def test_external_profile_uses_only_task_matched_multisession_datasets() -> None
     blocks = paper_blocks("external")
     assert {block["dataset"] for block in blocks} == {"Zhou2020", "Tavakolan2017"}
     assert all(block["protocols"] == ["within_split", "cross_session"] for block in blocks)
-

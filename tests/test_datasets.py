@@ -13,4 +13,3 @@ def test_tavakolan_is_exact_task_matched_and_multisession() -> None:
     assert len(dataset.subject_list) == 12
     assert dataset.n_sessions == 4
     assert {"rest", "right_hand"}.issubset(dataset.event_id)
-
