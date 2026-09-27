@@ -1,5 +1,9 @@
 # Mapa de evidencia
 
+> **Auditoría histórica de `e39fd1e`.** Los conteos, datasets y rutas siguientes documentan el
+> estado auditado antes de las correcciones. Consulte `RESOLUTION_REPORT.md` para la evidencia
+> vigente y no use este archivo como checklist de ejecución.
+
 ## Feedback canónico
 
 - `../Reviews/Retroalimentacion_consolidada_NeurIPS_2026.xlsx`, hoja `Ejes consolidados`, filas

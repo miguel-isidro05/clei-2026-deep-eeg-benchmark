@@ -53,5 +53,7 @@ ruff check .
 ```
 
 No considere lista la corrida si `run_statistics.py` devuelve error, si existe un `present=False`
-en `expected_cell_audit.csv` o si existe un `complete=False` en `completeness.csv`. Conserve juntos
+o un `expected=False` en `expected_cell_audit.csv`, o si existe un `complete=False` en
+`completeness.csv`. El análisis confirmatorio también exige el manifiesto `--phase all` o los tres
+manifiestos de fase. Conserve juntos
 `results/cells`, `results/manifests`, `results/statistics` y `results/latency`.

@@ -13,7 +13,7 @@ hiperparámetro alcanzable por cada arquitectura.
 | Scheduler | CosineAnnealingLR | Receta de convergencia transferida |
 | Train split interno | Ninguno | Todo el training fold se usa para ajuste; test nunca selecciona epochs |
 | Sampling rate | 128 Hz | Soporte común para los cinco modelos |
-| Input primario | 4 s | Igual para todos los modelos |
+| Input primario | 4 s en MI-OpenBCI/Zhou2020; 3 s en Tavakolan2017 | Igual para todos los modelos dentro de cada dataset; respeta la duración disponible de Tavakolan2017 |
 | Banda común | 8-30 Hz | Banda sensorimotora preespecificada |
 
 ## Parámetros por modelo

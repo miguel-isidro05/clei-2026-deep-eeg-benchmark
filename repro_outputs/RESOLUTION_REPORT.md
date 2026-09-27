@@ -22,7 +22,7 @@ Stieger2021. Stieger2021 queda fuera por su costo, tamaño y licencia no comerci
 
 ## Evidencia de ejecución
 
-- 43 pruebas aprobadas.
+- 47 pruebas aprobadas.
 - Ruff aprobado.
 - Preflight de las cinco arquitecturas y del lector BCI2000 aprobado.
 - Plan paper: 3.350 celdas, incluidas 250 `within_session` y 800 `cross_session`.
@@ -35,6 +35,11 @@ Stieger2021. Stieger2021 queda fuera por su costo, tamaño y licencia no comerci
 - La revisión científica independiente aprobó el diseño bajo el alcance congelado `right_hand`
   frente a `rest`; corrigió la descripción del perfil externo y acotó el paralelismo a hardware y
   entornos homogéneos.
+- La revisión final detectó que el análisis confirmatorio podía fallar abierto sin un manifiesto
+  completo. El gate ahora exige cobertura de las tres fases y la igualdad exacta entre celdas
+  esperadas y presentes; cualquier ausencia o celda extra bloquea Wilcoxon-Holm.
+- La duración se documentó por dataset: cuatro segundos para MI-OpenBCI/Zhou2020 y tres para
+  Tavakolan2017, idéntica entre modelos dentro de cada dataset.
 
 ## Pendiente legítimo
 

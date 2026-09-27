@@ -74,7 +74,9 @@ right reduction would answer a different task.
 Every fold applies the same preprocessing to all five models. Signals are resampled to 128 Hz,
 filtered from 1 to 40 Hz, then filtered from 8 to 30 Hz and standardized per channel using mean and
 standard deviation estimated only from the training partition. Primary analyses do not reject ICA
-components.
+components. MI-OpenBCI and Zhou2020 use four-second inputs (512 samples), whereas Tavakolan2017
+uses its three-second imagery interval (384 samples). Within each dataset, all five decoders
+receive identical temporal support.
 
 An exploratory sensitivity analysis fits FastICA only on training data. Components with kurtosis
 greater than 10 are candidates and at most the two largest-kurtosis components are removed. The

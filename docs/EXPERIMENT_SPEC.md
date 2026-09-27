@@ -35,7 +35,9 @@ forman parte del benchmark nuevo.
   kurtosis mayor que 10, con un maximo de dos.
 - Banda final 8 a 30 Hz.
 - Remuestreo a 128 Hz.
-- Epocas de cuatro segundos, 512 muestras.
+- Épocas fijadas por dataset: cuatro segundos (512 muestras) para MI-OpenBCI y Zhou2020, y tres
+  segundos (384 muestras) para Tavakolan2017. Todos los modelos reciben exactamente el mismo
+  soporte temporal dentro de cada dataset.
 - Z-score por canal calculado solo en training.
 
 Cada fold de sensibilidad guarda convergencia, iteraciones, seed, kurtosis, candidatos y

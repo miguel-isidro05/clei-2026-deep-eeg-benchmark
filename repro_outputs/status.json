@@ -1,8 +1,8 @@
 {
   "status": "scientific_blockers_resolved_results_pending",
   "date": "2026-09-27",
-  "audited_revision": "e39fd1eb8a4c2ce06d4f9267063633379afc54e8",
-  "tests_passed": 43,
+  "baseline_audited_revision": "e39fd1eb8a4c2ce06d4f9267063633379afc54e8",
+  "tests_passed": 47,
   "lint_passed": true,
   "preflight_passed": true,
   "real_smoke_passed": true,
@@ -12,6 +12,7 @@
   "go_for_short_pilot": true,
   "go_for_full_paper_run": true,
   "blocking_decisions": [],
+  "final_review_status": "pending_recheck",
   "manuscript_reconciled": true,
   "inferential_claims_verified": false
 }

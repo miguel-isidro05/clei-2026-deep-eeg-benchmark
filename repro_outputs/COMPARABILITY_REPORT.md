@@ -1,5 +1,9 @@
 # Reporte de comparabilidad
 
+> **Auditoría histórica de `e39fd1e`.** Este archivo conserva el diagnóstico anterior a las
+> correcciones y no describe el perfil vigente. Consulte `RESOLUTION_REPORT.md`,
+> `docs/MOABB_DATASET_DECISION.md` y `manuscript/revision_v2/` para el estado actual.
+
 ## Dentro de cada dataset
 
 La comparación entre modelos es estructuralmente válida: mismo split, input temporal, condiciones,

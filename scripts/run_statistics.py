@@ -4,12 +4,10 @@
 from __future__ import annotations
 
 import argparse
-import json
 from pathlib import Path
 
-import pandas as pd
-
 from deepbench.config import PAPER_SEEDS, RESULTS_DIR
+from deepbench.paper_audit import audit_expected_cells
 from deepbench.statistics import write_statistics
 
 
@@ -20,31 +18,17 @@ def main() -> None:
     parser.add_argument("--allow-incomplete", action="store_true")
     args = parser.parse_args()
     (args.results_dir / "statistics").mkdir(parents=True, exist_ok=True)
-    expected: set[str] = set()
-    missing = 0
-    for path in (args.results_dir / "manifests").glob("paper-expected-*.json"):
-        payload = json.loads(path.read_text(encoding="utf-8"))
-        expected.update(payload.get("expected_cells", []))
-    if expected:
-        present = {
-            str(path.relative_to(args.results_dir))
-            for path in (args.results_dir / "cells").glob("*.json")
-        }
-        audit = pd.DataFrame(
-            [{"cell": cell, "present": cell in present} for cell in sorted(expected)]
-        )
-        audit.to_csv(args.results_dir / "statistics" / "expected_cell_audit.csv", index=False)
-        missing = int((~audit["present"]).sum())
-        if missing and not args.allow_incomplete:
-            raise SystemExit(
-                f"{missing} expected paper cells are missing; see expected_cell_audit.csv"
-            )
+    audit, confirmatory, issues = audit_expected_cells(args.results_dir)
+    audit.to_csv(args.results_dir / "statistics" / "expected_cell_audit.csv", index=False)
+    if not confirmatory and not args.allow_incomplete:
+        details = "; ".join(issues)
+        raise SystemExit(f"Confirmatory integrity audit failed: {details}")
     write_statistics(
         args.results_dir / "cells",
         args.results_dir / "statistics",
         tuple(args.seeds),
         allow_incomplete=args.allow_incomplete,
-        force_exploratory=missing > 0,
+        force_exploratory=not confirmatory,
     )
     print(f"Statistics written to {args.results_dir / 'statistics'}")
 

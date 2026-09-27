@@ -86,6 +86,11 @@ python scripts/profile_latency.py --device cuda
 python scripts/run_statistics.py
 ```
 
+`run_statistics.py` solo genera inferencia confirmatoria cuando encuentra el manifiesto completo
+del perfil y el conjunto de celdas presentes coincide exactamente con el esperado. Sin manifiesto,
+con fases faltantes, celdas faltantes o celdas extra, se detiene. `--allow-incomplete` produce solo
+salidas descriptivas marcadas como exploratorias y nunca tablas Wilcoxon-Holm.
+
 `primary` ejecuta MI-OpenBCI sin ICA, con trials completos, split estratificado 70/30, cinco folds
 within-session, LOSO y el experimento separado de ventanas. `external` ejecuta por separado el
 baseline 70/30 y leave-one-session-out en Zhou2020 y Tavakolan2017, tambien sin ICA.
