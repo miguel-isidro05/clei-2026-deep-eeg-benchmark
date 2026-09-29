@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import warnings
 from dataclasses import dataclass
 
@@ -23,6 +24,14 @@ class PreprocessingResult:
 def _bandpass(x: np.ndarray, sfreq: float, low: float = 8.0, high: float = 30.0) -> np.ndarray:
     sos = scipy.signal.butter(5, (low, high), btype="bandpass", fs=sfreq, output="sos")
     return scipy.signal.sosfiltfilt(sos, x, axis=-1).astype(np.float32)
+
+
+def _array_sha256(x: np.ndarray) -> str:
+    contiguous = np.ascontiguousarray(x, dtype=np.float32)
+    digest = hashlib.sha256()
+    digest.update(str(contiguous.shape).encode())
+    digest.update(contiguous.tobytes())
+    return digest.hexdigest()
 
 
 def _apply_train_fitted_ica(
@@ -101,12 +110,21 @@ def preprocess_split(
     ch_names: tuple[str, ...],
     seed: int,
     ica_policy: str = "none",
+    loader_bandpass_hz: tuple[float, float] | None = None,
 ) -> PreprocessingResult:
     """Apply a train-only preprocessing fit and return an auditable report."""
     train = np.ascontiguousarray(x_train, dtype=np.float32)
     test = np.ascontiguousarray(x_test, dtype=np.float32)
-    train = _bandpass(train, sfreq, low=1.0, high=40.0)
-    test = _bandpass(test, sfreq, low=1.0, high=40.0)
+    if loader_bandpass_hz is None:
+        train = _bandpass(train, sfreq, low=1.0, high=40.0)
+        test = _bandpass(test, sfreq, low=1.0, high=40.0)
+        initial_bandpass_source = "preprocess_split"
+    else:
+        if tuple(map(float, loader_bandpass_hz)) != (1.0, 40.0):
+            raise ValueError(
+                "Loaded epochs must use the frozen 1-40 Hz bandpass before final filtering"
+            )
+        initial_bandpass_source = "dataset_loader"
     if ica_policy == "kurtosis":
         train, test, ica_report = _apply_train_fitted_ica(
             train,
@@ -136,8 +154,13 @@ def preprocess_split(
         report={
             "ica": ica_report,
             "initial_bandpass_hz": [1.0, 40.0],
+            "initial_bandpass_source": initial_bandpass_source,
+            "initial_bandpass_applied": initial_bandpass_source == "preprocess_split",
+            "loader_bandpass_hz": list(loader_bandpass_hz) if loader_bandpass_hz else None,
             "final_bandpass_hz": [8.0, 30.0],
             "zscore_fit_partition": "train_only",
+            "post_preprocessing_train_sha256": _array_sha256(train),
+            "post_preprocessing_test_sha256": _array_sha256(test),
             "n_train_trials": int(len(train)),
             "n_test_trials": int(len(test)),
         },
@@ -155,8 +178,13 @@ def augment_training(x: np.ndarray, y: np.ndarray, condition: str) -> tuple[np.n
     """Apply a model-independent training condition with no cross-trial mixing."""
     if condition == "full":
         return np.ascontiguousarray(x, dtype=np.float32), np.asarray(y, dtype=np.int64)
-    if condition == "center":
-        return center_crop(x), np.asarray(y, dtype=np.int64)
+    if condition in {"center", "center_x2", "center_x6"}:
+        repetitions = {"center": 1, "center_x2": 2, "center_x6": 6}[condition]
+        cropped = center_crop(x)
+        return (
+            np.repeat(cropped, repetitions, axis=0).astype(np.float32, copy=False),
+            np.repeat(np.asarray(y, dtype=np.int64), repetitions),
+        )
     if AUGMENT_WINDOW_SAMPLES > x.shape[-1]:
         raise ValueError("Augmentation window exceeds trial length")
     if condition == "nonoverlap":
@@ -174,6 +202,6 @@ def prepare_test_input(x: np.ndarray, condition: str) -> np.ndarray:
     """Keep evaluation at one prediction per original trial."""
     if condition == "full":
         return np.ascontiguousarray(x, dtype=np.float32)
-    if condition in {"center", "nonoverlap", "overlap"}:
+    if condition in {"center", "center_x2", "center_x6", "nonoverlap", "overlap"}:
         return center_crop(x)
     raise ValueError(f"Unsupported condition: {condition}")

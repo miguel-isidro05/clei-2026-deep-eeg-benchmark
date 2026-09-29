@@ -2,7 +2,12 @@
 
 from __future__ import annotations
 
+import hashlib
+import json
 from typing import TypedDict
+
+from .config import MODEL_NAMES, PAPER_EPOCHS, PAPER_PROFILE_VERSION, PAPER_SEEDS
+from .models import recipe_dict
 
 
 class PaperBlock(TypedDict):
@@ -29,7 +34,7 @@ def paper_blocks(phase: str) -> list[PaperBlock]:
                 {
                     "dataset": "MI-OpenBCI",
                     "protocols": ["within_split"],
-                    "conditions": ["center", "nonoverlap", "overlap"],
+                    "conditions": ["center_x2", "nonoverlap", "center_x6", "overlap"],
                     "ica_policy": "none",
                 },
             ]
@@ -54,3 +59,19 @@ def paper_blocks(phase: str) -> list[PaperBlock]:
             }
         )
     return blocks
+
+
+def paper_profile_metadata(phase: str) -> dict[str, object]:
+    """Return the frozen scientific profile embedded in expectation manifests."""
+    profile: dict[str, object] = {
+        "profile_version": PAPER_PROFILE_VERSION,
+        "phase": phase,
+        "models": list(MODEL_NAMES),
+        "seeds": list(PAPER_SEEDS),
+        "epochs": PAPER_EPOCHS,
+        "blocks": paper_blocks(phase),
+        "recipes": {model: recipe_dict(model, PAPER_EPOCHS) for model in MODEL_NAMES},
+    }
+    canonical = json.dumps(profile, sort_keys=True, separators=(",", ":"))
+    profile["profile_sha256"] = hashlib.sha256(canonical.encode()).hexdigest()
+    return profile

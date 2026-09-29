@@ -39,7 +39,7 @@ def _recording_sha256(
     sfreq: float,
     ch_names: tuple[str, ...],
 ) -> str:
-    """Fingerprint the exact standardized arrays consumed by the benchmark."""
+    """Fingerprint loader-standardized epochs before fold-local preprocessing."""
     digest = hashlib.sha256()
     metadata = {
         "shape": list(x.shape),
@@ -122,9 +122,8 @@ def load_mi_openbci_subject(subject: str) -> SubjectRecording:
         sfreq=TARGET_SFREQ,
         ch_names=channels,
         task=DATASET_SPECS["MI-OpenBCI"].task,
-        data_sha256=_recording_sha256(
-            x, y, sessions, sfreq=TARGET_SFREQ, ch_names=channels
-        ),
+        data_sha256=_recording_sha256(x, y, sessions, sfreq=TARGET_SFREQ, ch_names=channels),
+        loader_bandpass_hz=None,
     )
     recording.validate()
     return recording
@@ -200,6 +199,7 @@ def load_moabb_subject(dataset_name: str, subject: str) -> SubjectRecording:
         ch_names=ch_names,
         task=spec.task,
         data_sha256=_recording_sha256(x, y, sessions, sfreq=TARGET_SFREQ, ch_names=ch_names),
+        loader_bandpass_hz=(1.0, 40.0),
     )
     recording.validate()
     return recording

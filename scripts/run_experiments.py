@@ -26,7 +26,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--conditions",
         nargs="+",
-        choices=("full", "center", "nonoverlap", "overlap"),
+        choices=("full", "center", "center_x2", "center_x6", "nonoverlap", "overlap"),
         default=["full"],
     )
     parser.add_argument("--seeds", nargs="+", type=int, default=list(PAPER_SEEDS))

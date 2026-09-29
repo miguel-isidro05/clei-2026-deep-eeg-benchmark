@@ -259,7 +259,7 @@ def paired_model_tests(frame: pd.DataFrame) -> pd.DataFrame:
 
 
 def augmentation_tests(frame: pd.DataFrame) -> pd.DataFrame:
-    """Test both augmentation conditions against center-crop controls by subject."""
+    """Test augmentations against compute-matched repeated center-crop controls."""
     subject_means = aggregate_seeds(frame.loc[frame["metric"].isin(PRIMARY_METRICS)])
     family_keys = ["dataset", "task", "protocol", "ica_policy", "metric"]
     records: list[dict[str, object]] = []
@@ -267,8 +267,13 @@ def augmentation_tests(frame: pd.DataFrame) -> pd.DataFrame:
         family_records = []
         for model in sorted(values["model"].unique()):
             model_values = values.loc[values["model"] == model]
-            center = model_values.loc[model_values["condition"] == "center", ["subject", "value"]]
-            for condition in ("nonoverlap", "overlap"):
+            for condition, control in (
+                ("nonoverlap", "center_x2"),
+                ("overlap", "center_x6"),
+            ):
+                center = model_values.loc[
+                    model_values["condition"] == control, ["subject", "value"]
+                ]
                 candidate = model_values.loc[
                     model_values["condition"] == condition, ["subject", "value"]
                 ]
@@ -292,7 +297,7 @@ def augmentation_tests(frame: pd.DataFrame) -> pd.DataFrame:
                     {
                         **dict(zip(family_keys, family, strict=True)),
                         "model": model,
-                        "comparison": f"{condition}-center",
+                        "comparison": f"{condition}-{control}",
                         "n_subjects": len(paired),
                         "mean_difference": mean,
                         "difference_ci95_low": low,

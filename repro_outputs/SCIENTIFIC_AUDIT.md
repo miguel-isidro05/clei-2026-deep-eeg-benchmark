@@ -53,15 +53,15 @@ Evidencia: `src/deepbench/models.py:20-35`, `src/deepbench/runner.py:55-89`,
 
 | ID | Veredicto | Evidencia y lectura | Acción mínima restante |
 |---|---|---|---|
-| A01 | PARCIAL + PENDIENTE DE EJECUCIÓN | Zhou2020 y BNCI2014_001 están en el perfil (`run_paper.py:87-96`), pero no hay resultados ni análisis modelo por dataset. | Ejecutar; reportar datasets por separado; no atribuir diferencias al hardware. |
-| A02 | FALTA | No se incluye un segundo dataset low-cost. Zhou2020 y BNCI2014_001 son validaciones externas research-grade. | Añadir uno compatible o limitar todos los claims a MI-OpenBCI. |
-| A03 | PARCIAL + PENDIENTE DE EJECUCIÓN | Wilcoxon bilateral, Holm y CI pareados están implementados (`statistics.py:174-217`); falta tamaño de efecto. | Añadir rank-biserial u otro efecto pareado y ejecutar la matriz completa. |
+| A01 | PARCIAL + PENDIENTE DE EJECUCIÓN | Zhou2020 y Tavakolan2017 están en el perfil externo, pero no hay resultados ni análisis modelo por dataset. | Ejecutar; reportar datasets por separado; no atribuir diferencias al hardware. |
+| A02 | FALTA | No se incluye un segundo dataset low-cost. Zhou2020 y Tavakolan2017 son validaciones externas research-grade task-matched. | Añadir uno compatible o limitar todos los claims a MI-OpenBCI. |
+| A03 | CUMPLE EN CÓDIGO + PENDIENTE DE EJECUCIÓN | Wilcoxon bilateral, Holm, CI pareados y rank-biserial pareado están implementados (`statistics.py`). | Ejecutar la matriz completa. |
 | A04 | CUMPLE EN CÓDIGO + PENDIENTE DE EJECUCIÓN | Seeds 0-4 (`config.py:16`), split fijo y seed ICA fija por fold (`evaluation.py:194-197`); se promedian dentro de sujeto (`statistics.py:120-123`). | Completar cinco seeds y publicar la dispersión. |
 | A05 | CUMPLE BAJO EL NUEVO ALCANCE | CSP fue retirado. Los cinco modelos deep reciben trials completos en el primario y condiciones idénticas en la ablación (`run_paper.py:70-84`). | Explicar que el confusor clásico-versus-deep dejó de formar parte de la pregunta. |
-| A06 | NO APLICA A CSP; CUMPLE PARA DL | La matriz deep incluye `center`, `nonoverlap` y `overlap` para los cinco modelos y registra trials/ejemplos (`evaluation.py:166-169`). | Reescribir la respuesta al revisor; no reutilizar la tabla CSP histórica. |
-| A07 | CUMPLE EN DISEÑO + PENDIENTE DE EJECUCIÓN | Split antes de ventanas, test a una predicción por trial y control no solapado (`preprocessing.py:154-178`). | Ejecutar las tres condiciones y presentar deltas pareados por sujeto. |
-| A08 | PARCIAL | Cada celda conserva `n_train_trials`, `n_train_examples` y `n_test_trials`; no existe una tabla automática de contabilidad. | Añadir generador CSV por dataset/protocolo/fold/clase/condición. |
-| A09 | FALTA EN EL PERFIL PAPER | 70/30, 5-fold y LOSO existen en la API, pero el perfil ejecuta 70/30 y LOSO, no 5-fold (`run_paper.py:70-85`). | Incluir `within_session` para MI-OpenBCI o retirar el protocolo con justificación preespecificada. |
+| A06 | NO APLICA A CSP; CUMPLE PARA DL | La matriz deep incluye `center_x2`, `nonoverlap`, `center_x6` y `overlap` para los cinco modelos y registra trials/ejemplos. | Ejecutar y no reutilizar la tabla CSP histórica. |
+| A07 | CUMPLE EN DISEÑO + PENDIENTE DE EJECUCIÓN | Split antes de ventanas, test a una predicción por trial y controles center-crop emparejados por computo. | Ejecutar las cuatro condiciones y presentar deltas pareados por sujeto. |
+| A08 | CUMPLE EN CÓDIGO + PENDIENTE DE EJECUCIÓN | Cada celda conserva `n_train_trials`, `n_train_examples` y `n_test_trials`; `sample_accounting.csv` se genera automáticamente. | Ejecutar la matriz completa. |
+| A09 | CUMPLE EN PERFIL + PENDIENTE DE EJECUCIÓN | El perfil primario incluye 70/30, 5-fold `within_session` y LOSO para MI-OpenBCI. | Ejecutar la matriz completa. |
 | A10 | CUMPLE | Z-score e ICA se ajustan con train; ventanas no cruzan trials; tests verifican splits y normalización (`tests/test_protocols.py:23-40`, `tests/test_preprocessing.py:8-34`). | Añadir una prueba específica del camino ICA real. |
 | A11 | PARCIAL | Las recetas son fijas y no hay early stopping ni test tuning (`models.py:92-125`), pero no hay procedencia por hiperparámetro. | Crear tabla fuente/decisión/justificación por modelo antes de correr. |
 | A12 | PARCIAL DELIBERADO | El primario usa `none`; la sensibilidad usa FastICA train-only y kurtosis mayor que 10, máximo dos, con log completo (`preprocessing.py:28-93`). No identifica ocular/muscular. | Mantener el claim limitado o usar un clasificador validado de IC/EOG si se requiere identificación fisiológica. |
@@ -82,10 +82,10 @@ Evidencia: `src/deepbench/models.py:20-35`, `src/deepbench/runner.py:55-89`,
 | A27 | PENDIENTE DEL VENUE | Es un requisito de plantilla, no del pipeline. | Aplicar la guía del próximo venue al artefacto final. |
 | A28 | PARCIAL | Se conserva `training_history` por epoch (`evaluation.py:139-169`), pero no hay figura ni criterio automático de diagnóstico. | Generar curvas suplementarias y revisar convergencia sin seleccionar epochs post-hoc. |
 | A29 | PARCIAL | Se guardan `y_true`/`y_pred`, suficientes para matrices, pero no hay generador estandarizado. | Añadir figura normalizada por fila con N y regla de pooling. |
-| A30 | CUMPLE EN CÓDIGO + PENDIENTE DE EJECUCIÓN | Leave-one-session-out está implementado y probado (`evaluation.py:30-37`, `tests/test_protocols.py:23-30`) para Zhou2020 y BNCI2014_001. | Completar ambas corridas y no extrapolar cross-session a MI-OpenBCI. |
+| A30 | CUMPLE EN CÓDIGO + PENDIENTE DE EJECUCIÓN | Leave-one-session-out está implementado y probado (`evaluation.py:30-37`, `tests/test_protocols.py:23-30`) para Zhou2020 y Tavakolan2017. | Completar ambas corridas y no extrapolar cross-session a MI-OpenBCI. |
 | A31 | FALTA, BLOQUEANTE PARA EL PAPER | El TeX activo sigue describiendo otro benchmark y otros resultados. | Crear fuente `revision_v2`, preservar históricos y reemplazar solo con salidas verificadas. |
 | A32 | CUMPLE EN CÓDIGO; PENDIENTE EN TABLAS | Todas las métricas se calculan sobre predicciones held-out (`evaluation.py:251-271`), no sobre train. | Etiquetar explícitamente held-out test en cada tabla y leyenda. |
-| A33 | PARCIAL | Hay SD entre sujetos, SD entre seeds y CI t (`statistics.py:144-170`, `194-206`); falta tamaño de efecto. | Añadir efecto pareado y su convención de signo. |
+| A33 | CUMPLE EN CÓDIGO + PENDIENTE DE EJECUCIÓN | Hay SD entre sujetos, SD entre seeds, CI t y rank-biserial pareado con signo explícito. | Ejecutar la matriz completa. |
 | A34 | CUMPLE PARA EL ALCANCE DECLARADO | Los cinco modelos se miden con mismo backend, dispositivo, input, warm-up y batch 1/64 (`profile_latency.py:16-50`). No es end-to-end ni energía. | Ejecutar CPU y CUDA por separado si se comparan plataformas; no mezclar ambas en un ranking. |
 | A35 | CUMPLE | MOABB se usa para datasets y Braindecode para los cinco decoders (`datasets.py:93-180`, `models.py:12-13`). | Conservar versiones y validar descarga en la PC de Cayetano. |
 

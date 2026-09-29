@@ -3,13 +3,16 @@ from __future__ import annotations
 import json
 
 from deepbench.paper_audit import audit_expected_cells
+from deepbench.paper_profile import paper_profile_metadata
+from deepbench.runner import cell_path
 
 
 def _write_manifest(root, name: str, phase: str, cells: list[str]) -> None:
     manifests = root / "manifests"
     manifests.mkdir(parents=True, exist_ok=True)
     (manifests / name).write_text(
-        json.dumps({"phase": phase, "expected_cells": cells}), encoding="utf-8"
+        json.dumps({**paper_profile_metadata(phase), "expected_cells": cells}),
+        encoding="utf-8",
     )
 
 
@@ -45,9 +48,51 @@ def test_confirmatory_audit_rejects_extra_cells(tmp_path) -> None:
 
 
 def test_confirmatory_audit_accepts_exact_all_profile(tmp_path) -> None:
-    expected = "cells/expected.json"
+    destination = cell_path(
+        tmp_path,
+        "MI-OpenBCI",
+        "within_split",
+        "full",
+        "EEGNet",
+        0,
+        "S02",
+        "none",
+    )
+    expected = str(destination.relative_to(tmp_path))
     _write_manifest(tmp_path, "paper-expected-all-shard0-of-1.json", "all", [expected])
-    _write_cell(tmp_path, "expected.json")
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    destination.write_text(
+        json.dumps(
+            {
+                "dataset": "MI-OpenBCI",
+                "protocol": "within_split",
+                "condition": "full",
+                "ica_policy": "none",
+                "model": "EEGNet",
+                "subject": "S02",
+                "seed": 0,
+                "run_configuration": {
+                    "dataset": "MI-OpenBCI",
+                    "protocol": "within_split",
+                    "condition": "full",
+                    "ica_policy": "none",
+                    "model": "EEGNet",
+                    "subject": "S02",
+                    "seed": 0,
+                    "epochs": 300,
+                    "recipe": paper_profile_metadata("all")["recipes"]["EEGNet"],
+                },
+                "fold_reports": [
+                    {
+                        "training_history": [
+                            {"epoch": epoch} for epoch in range(1, 301)
+                        ]
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
     audit, confirmatory, issues = audit_expected_cells(tmp_path)
     assert confirmatory is True
     assert issues == []
@@ -58,11 +103,47 @@ def test_confirmatory_audit_accepts_exact_all_profile(tmp_path) -> None:
     }
 
 
+def test_confirmatory_audit_rejects_non_frozen_epoch_count(tmp_path) -> None:
+    destination = cell_path(
+        tmp_path, "MI-OpenBCI", "within_split", "full", "EEGNet", 0, "S02", "none"
+    )
+    expected = str(destination.relative_to(tmp_path))
+    _write_manifest(tmp_path, "paper-expected-all-shard0-of-1.json", "all", [expected])
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    destination.write_text(
+        json.dumps(
+            {
+                "dataset": "MI-OpenBCI",
+                "protocol": "within_split",
+                "condition": "full",
+                "ica_policy": "none",
+                "model": "EEGNet",
+                "subject": "S02",
+                "seed": 0,
+                "run_configuration": {
+                    "dataset": "MI-OpenBCI",
+                    "protocol": "within_split",
+                    "condition": "full",
+                    "ica_policy": "none",
+                    "model": "EEGNet",
+                    "subject": "S02",
+                    "seed": 0,
+                    "epochs": 3,
+                    "recipe": {},
+                },
+                "fold_reports": [{"training_history": [{"epoch": 1}]}],
+            }
+        ),
+        encoding="utf-8",
+    )
+    _, confirmatory, issues = audit_expected_cells(tmp_path)
+    assert confirmatory is False
+    assert "exactly 300 epochs" in " ".join(issues)
+
+
 def test_confirmatory_audit_rejects_partial_phase_coverage(tmp_path) -> None:
     expected = "cells/expected.json"
-    _write_manifest(
-        tmp_path, "paper-expected-primary-shard0-of-1.json", "primary", [expected]
-    )
+    _write_manifest(tmp_path, "paper-expected-primary-shard0-of-1.json", "primary", [expected])
     _write_cell(tmp_path, "expected.json")
     _, confirmatory, issues = audit_expected_cells(tmp_path)
     assert confirmatory is False

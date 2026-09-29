@@ -71,12 +71,12 @@ right reduction would answer a different task.
 
 \subsection{Preprocessing}
 
-Every fold applies the same preprocessing to all five models. Signals are resampled to 128 Hz,
-filtered from 1 to 40 Hz, then filtered from 8 to 30 Hz and standardized per channel using mean and
-standard deviation estimated only from the training partition. Primary analyses do not reject ICA
-components. MI-OpenBCI and Zhou2020 use four-second inputs (512 samples), whereas Tavakolan2017
-uses its three-second imagery interval (384 samples). Within each dataset, all five decoders
-receive identical temporal support.
+Every fold applies the same preprocessing to all five models. Signals are resampled to 128 Hz and
+receive one 1--40 Hz filter, either in the MOABB loader or in the local preprocessing path, followed
+by the common 8--30 Hz filter. Per-channel mean and standard deviation are estimated only from the
+training partition. Primary analyses do not reject ICA components. MI-OpenBCI and Zhou2020 use
+four-second inputs (512 samples), whereas Tavakolan2017 uses its three-second imagery interval
+(384 samples). Within each dataset, all five decoders receive identical temporal support.
 
 An exploratory sensitivity analysis fits FastICA only on training data. Components with kurtosis
 greater than 10 are candidates and at most the two largest-kurtosis components are removed. The
@@ -86,9 +86,11 @@ This rule is not described as ocular or muscular component identification.
 \subsection{Decoders and training}
 
 The five decoders are EEGNet, FBCNet, ShallowConvNet implemented as Braindecode's
-ShallowFBCSPNet, EEGConformer, and EEGInceptionMI. All implementations come from Braindecode
-1.5.2. FBCNet uses six internal subbands restricted to 8--30 Hz. Table~\ref{tab:recipes} gives the
-frozen recipes. The held-out test partition is never used for hyperparameter or epoch selection.
+ShallowFBCSPNet, EEGConformer, and EEGInceptionMI. Their architectures follow the original model
+reports~\cite{eegnet,fbcnet,shallow,conformer,eeginception}; the evaluated implementations come
+from Braindecode 1.5.2~\cite{braindecode}. FBCNet uses six internal subbands restricted to
+8--30 Hz. Table~\ref{tab:recipes} gives the frozen recipes. The held-out test partition is never
+used for hyperparameter or epoch selection.
 
 \begin{table}[t]
 \caption{Predeclared training recipes. Every model uses 300 fixed epochs, batch size 64,
@@ -125,10 +127,10 @@ out evaluation within each participant. MI-OpenBCI has one session and therefore
 cross-session result.
 
 The augmentation analysis is separate from the primary full-trial table. All five models receive
-the same two-second input under three training conditions: one center crop, two non-overlapping
-windows, or six overlapping windows. Complete trials are split before segmentation. Test data
-produce one prediction per original trial, so windows are never treated as independent statistical
-observations.
+the same two-second input under compute-matched training conditions: the center crop repeated twice
+versus two non-overlapping windows, and the center crop repeated six times versus six overlapping
+windows. Complete trials are split before segmentation. Test data produce one prediction per
+original trial, so windows are never treated as independent statistical observations.
 
 \subsection{Metrics and statistical analysis}
 
@@ -141,10 +143,18 @@ compared using two-sided paired Wilcoxon tests followed by Holm correction. Tabl
 and median paired difference, a 95\% Student-$t$ interval for the mean paired difference, and paired
 rank-biserial correlation. No Friedman test or bootstrap interval is used.
 
-The augmentation family contains the two predeclared comparisons, non-overlapping minus center and
-overlapping minus center, for each of the five models. Inference is blocked if any expected cell,
-seed, participant cohort, code fingerprint, training recipe, environment identity, or data identity
-is inconsistent.
+The augmentation family contains the two predeclared compute-matched comparisons,
+non-overlapping minus repeated-center-two and overlapping minus repeated-center-six, for each of
+the five models. Inference is blocked if any expected cell, seed, participant cohort, code
+fingerprint, training recipe, environment identity, or data identity is inconsistent.
+
+\subsection{Signal-quality audit}
+
+Before training, the pipeline checks finite-sample proportion, variance, standard deviation,
+root-mean-square amplitude, peak-to-peak amplitude, class counts, session counts, constant or
+near-flat channels, and relative-amplitude alerts. These checks do not remove participants,
+channels, or trials automatically. Line-noise estimates are marked unavailable for MOABB epochs
+that have already passed through the loader's 1--40 Hz filter.
 
 \subsection{Latency scope}
 
@@ -175,6 +185,15 @@ burden, user workload, energy, or clinical effectiveness. The ICA sensitivity is
 does not assign physiological artifact labels. Model-forward latency does not represent complete
 system latency.
 
+\subsection{Ethics, data availability, and software}
+
+This work is a secondary analysis of public, de-identified datasets. No participants were
+recruited and no new EEG was recorded for this study. Ethical approval and consent for the
+original acquisitions are reported by the corresponding dataset publications. The benchmark code,
+environment specification, manifests, and derived results are available from the project
+repository. Raw EEG is not redistributed; users obtain MI-OpenBCI from its original distribution
+and Zhou2020 and Tavakolan2017 through MOABB under the terms attached to each dataset.
+
 \section{Conclusion}
 
 Conclusions about decoder ranking, augmentation, and cross-session robustness remain pending until
@@ -196,6 +215,11 @@ V. Peterson, C. Galv{\'a}n, H. Hern{\'a}ndez, M. P. Saavedra, and R. Spies,
 V. J. Lawhern \emph{et al.}, ``EEGNet: a compact convolutional network for EEG-based
 brain-computer interfaces,'' \emph{Journal of Neural Engineering}, vol. 15, no. 5, 2018.
 
+\bibitem{fbcnet}
+R. Mane, N. Robinson, A. P. Vinod, S.-W. Lee, and C. Guan,
+``A multi-view CNN with novel variance layer for motor imagery brain computer interface,''
+in \emph{Proc. IEEE EMBC}, pp. 2950--2953, 2020.
+
 \bibitem{shallow}
 R. T. Schirrmeister \emph{et al.}, ``Deep learning with convolutional neural networks for EEG
 decoding and visualization,'' \emph{Human Brain Mapping}, vol. 38, no. 11, 2017.
@@ -204,6 +228,15 @@ decoding and visualization,'' \emph{Human Brain Mapping}, vol. 38, no. 11, 2017.
 Y. Song, Q. Zheng, B. Liu, and X. Gao, ``EEG Conformer: convolutional transformer for EEG decoding
 and visualization,'' \emph{IEEE Transactions on Neural Systems and Rehabilitation Engineering},
 vol. 31, 2023.
+
+\bibitem{eeginception}
+C. Zhang, Y.-K. Kim, and A. Eskandarian, ``EEG-Inception: an accurate and robust end-to-end
+neural network for EEG-based motor imagery classification,'' \emph{Journal of Neural Engineering},
+vol. 18, no. 4, Art. no. 046014, 2021.
+
+\bibitem{braindecode}
+B. Aristimunha \emph{et al.}, ``Braindecode: toolbox for decoding raw electrophysiological brain
+data with deep learning models,'' Zenodo, doi: 10.5281/zenodo.17699192.
 
 \bibitem{holm}
 S. Holm, ``A simple sequentially rejective multiple test procedure,''

@@ -22,10 +22,11 @@ Stieger2021. Stieger2021 queda fuera por su costo, tamaño y licencia no comerci
 
 ## Evidencia de ejecución
 
-- 47 pruebas aprobadas.
+- 52 pruebas aprobadas.
 - Ruff aprobado.
 - Preflight de las cinco arquitecturas y del lector BCI2000 aprobado.
-- Plan paper: 3.350 celdas, incluidas 250 `within_session` y 800 `cross_session`.
+- Plan paper: 3.600 celdas, incluidas 250 `within_session`, 800 `cross_session` y controles
+  de augmentacion emparejados por computo.
 - Smoke real MI-OpenBCI/S02/EEGNet aprobado con hashes de entorno y datos, procedencia de receta,
   conteos de clase y `sample_accounting.csv`.
 - Smoke real Tavakolan2017/sujeto 1/EEGNet aprobado: 160 trials balanceados, 32 canales,

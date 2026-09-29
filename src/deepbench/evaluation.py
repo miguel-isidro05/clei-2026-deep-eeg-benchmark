@@ -21,6 +21,15 @@ def _index_hash(indices: np.ndarray) -> str:
     return hashlib.sha256(np.asarray(indices, dtype=np.int64).tobytes()).hexdigest()
 
 
+def _array_hash(array: np.ndarray) -> str:
+    contiguous = np.ascontiguousarray(array)
+    digest = hashlib.sha256()
+    digest.update(str(contiguous.shape).encode())
+    digest.update(str(contiguous.dtype).encode())
+    digest.update(contiguous.tobytes())
+    return digest.hexdigest()
+
+
 def _class_counts(labels: np.ndarray) -> dict[str, int]:
     return {str(label): int(np.sum(labels == label)) for label in (0, 1)}
 
@@ -121,6 +130,7 @@ def _fit_fold(
         ch_names=recording.ch_names,
         seed=ica_seed,
         ica_policy=ica_policy,
+        loader_bandpass_hz=recording.loader_bandpass_hz,
     )
     x_train, y_train = augment_training(processed.x_train, recording.y[train_indices], condition)
     x_test = prepare_test_input(processed.x_test, condition)
@@ -167,6 +177,8 @@ def _fit_fold(
         **processed.report,
         "train_index_sha256": _index_hash(train_indices),
         "test_index_sha256": _index_hash(test_indices),
+        "model_train_input_sha256": _array_hash(x_train),
+        "model_test_input_sha256": _array_hash(x_test),
         "n_train_trials": int(len(train_indices)),
         "n_train_examples": int(len(x_train)),
         "n_test_trials": int(len(test_indices)),

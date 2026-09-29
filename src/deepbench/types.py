@@ -21,6 +21,7 @@ class SubjectRecording:
     ch_names: tuple[str, ...]
     task: str
     data_sha256: str | None = None
+    loader_bandpass_hz: tuple[float, float] | None = None
 
     def validate(self) -> None:
         """Raise a descriptive error when a loader violates the common contract."""
@@ -33,6 +34,8 @@ class SubjectRecording:
             raise ValueError("ch_names does not match the channel dimension")
         if set(np.unique(self.y)) != {0, 1}:
             raise ValueError(f"binary labels {{0, 1}} required, got {np.unique(self.y)}")
+        if not np.isfinite(self.x).all():
+            raise ValueError("x contains NaN or infinite samples")
 
 
 @dataclass

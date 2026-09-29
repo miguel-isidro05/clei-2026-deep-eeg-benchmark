@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from deepbench.config import PAPER_EPOCHS
 from deepbench.paper_profile import paper_blocks
 
 
@@ -14,3 +15,15 @@ def test_external_profile_uses_only_task_matched_multisession_datasets() -> None
     blocks = paper_blocks("external")
     assert {block["dataset"] for block in blocks} == {"Zhou2020", "Tavakolan2017"}
     assert all(block["protocols"] == ["within_split", "cross_session"] for block in blocks)
+
+
+def test_augmentation_profile_uses_compute_matched_controls() -> None:
+    blocks = paper_blocks("primary")
+    augmentation = next(block for block in blocks if block["conditions"] != ["full"])
+    assert augmentation["conditions"] == [
+        "center_x2",
+        "nonoverlap",
+        "center_x6",
+        "overlap",
+    ]
+    assert PAPER_EPOCHS == 300

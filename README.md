@@ -106,8 +106,8 @@ within-session, LOSO y el experimento separado de ventanas. `external` ejecuta p
 baseline 70/30 y leave-one-session-out en Zhou2020 y Tavakolan2017, tambien sin ICA.
 `ica-sensitivity` repite el bloque principal 70/30 con la politica exploratoria de kurtosis.
 
-El perfil completo contiene 3.350 celdas y ronda 12.150 entrenamientos, porque las celdas
-within-session y cross-session contienen varios folds. Cada celda externa contiene un baseline
+El perfil completo contiene 3.600 celdas. El numero de entrenamientos es mayor que el numero de
+celdas porque `within_session` y `cross_session` contienen varios folds. Cada celda externa contiene un baseline
 `within_split` y un fold por sesion retenida para `cross_session`; `within_session` de cinco folds
 se ejecuta en MI-OpenBCI. Antes de lanzarlo, mida una muestra pequena con 3 a 5 epochs en otro
 directorio y estime el
@@ -145,13 +145,17 @@ mucho espacio. Agregue `--save-weights` solo si necesita archivar cada modelo.
 - `results/statistics/descriptive_subject_seed_variability.csv`: accuracy y kappa con dispersion
   entre sujetos, IC 95% y variabilidad de optimizacion separada.
 - `results/statistics/paired_wilcoxon_holm.csv`: diez pares de modelos por familia.
-- `results/statistics/augmentation_wilcoxon_holm.csv`: ventanas contra control center-crop.
+- `results/statistics/augmentation_wilcoxon_holm.csv`: ventanas contra controles center-crop
+  emparejados por computo (`nonoverlap-center_x2` y `overlap-center_x6`).
 - `results/statistics/completeness.csv`: semillas faltantes; la inferencia se bloquea si falta una.
 - `results/statistics/expected_cell_audit.csv`: producto esperado del perfil; detecta incluso
   modelos, sujetos o condiciones totalmente ausentes.
 - `results/statistics/sample_accounting.csv`: trials, ejemplos, folds y conteos de clase por
   celda, incluida la multiplicacion producida por ventanas.
 - `results/latency/`: latencia controlada de forward pass.
+- `results/quality/`: auditoria no destructiva de calidad de señal, conteos y flags.
+- `results/figures/`: figuras PNG/PDF generadas solo tras pasar el gate confirmatorio.
+- `results/logs/` y `results/EXPERIMENT_LOG.md`: consola completa y resumen auditable de corrida.
 
 ## Que significa la latencia
 

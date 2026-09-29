@@ -39,7 +39,15 @@ python scripts/run_experiments.py --dataset Tavakolan2017 --subjects 1 \
 
 ## 3. Corrida paper
 
-Ejecute cada fase por separado dentro de `tmux`, `screen` o un job persistente:
+La forma recomendada en la RTX A6000 doble es el script completo, porque guarda consola y resumen:
+
+```bash
+bash scripts/run_cayetano.sh
+```
+
+El script escribe `results/logs/paper-*.log`, `results/EXPERIMENT_LOG.md`, tablas, latencia y
+figuras. Si prefiere ejecutar manualmente, use cada fase por separado dentro de `tmux`, `screen` o
+un job persistente:
 
 ```bash
 python scripts/run_paper.py --phase all --plan-only
@@ -60,6 +68,8 @@ vez de mezclar resultados; use una nueva carpeta o `--overwrite` conscientemente
 ```bash
 python scripts/profile_latency.py --device cuda
 python scripts/run_statistics.py
+python scripts/generate_figures.py
+python scripts/write_run_report.py
 pytest
 ruff check .
 ```
@@ -68,4 +78,5 @@ No considere lista la corrida si `run_statistics.py` devuelve error, si existe u
 o un `expected=False` en `expected_cell_audit.csv`, o si existe un `complete=False` en
 `completeness.csv`. El análisis confirmatorio también exige el manifiesto `--phase all` o los tres
 manifiestos de fase. Conserve juntos
-`results/cells`, `results/manifests`, `results/statistics` y `results/latency`.
+`results/cells`, `results/manifests`, `results/statistics`, `results/quality`, `results/latency`,
+`results/figures`, `results/logs` y `results/EXPERIMENT_LOG.md`.

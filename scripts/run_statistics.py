@@ -4,10 +4,12 @@
 from __future__ import annotations
 
 import argparse
+import json
 from pathlib import Path
 
 from deepbench.config import PAPER_SEEDS, RESULTS_DIR
-from deepbench.paper_audit import audit_expected_cells
+from deepbench.io import write_json_atomic
+from deepbench.paper_audit import audit_expected_cells, result_cells_sha256
 from deepbench.statistics import write_statistics
 
 
@@ -29,6 +31,24 @@ def main() -> None:
         tuple(args.seeds),
         allow_incomplete=args.allow_incomplete,
         force_exploratory=not confirmatory,
+    )
+    expectation_manifests = sorted(
+        (args.results_dir / "manifests").glob("paper-expected-*.json")
+    )
+    profile_hashes = sorted(
+        {
+            str(json.loads(path.read_text(encoding="utf-8")).get("profile_sha256"))
+            for path in expectation_manifests
+        }
+    )
+    write_json_atomic(
+        args.results_dir / "statistics" / "statistics_manifest.json",
+        {
+            "result_cells_sha256": result_cells_sha256(args.results_dir),
+            "profile_sha256_values": profile_hashes,
+            "confirmatory": confirmatory,
+            "expected_cell_count": int(len(audit)),
+        },
     )
     print(f"Statistics written to {args.results_dir / 'statistics'}")
 

@@ -53,10 +53,11 @@ identificacion ocular o muscular.
 - `loso`: leave-one-subject-out, reservado para datasets con montaje compatible entre sujetos.
 
 La tabla primaria usa trials completos y sin sliding windows. La augmentacion es un experimento
-separado con tres condiciones aplicadas por igual a todos los modelos:
+separado con cuatro condiciones aplicadas por igual a todos los modelos:
 
-- `center`: un crop central de dos segundos.
+- `center_x2`: el crop central de dos segundos repetido dos veces para emparejar `nonoverlap`.
 - `nonoverlap`: dos ventanas no solapadas de dos segundos durante training.
+- `center_x6`: el crop central de dos segundos repetido seis veces para emparejar `overlap`.
 - `overlap`: seis ventanas solapadas de dos segundos durante training.
 
 La evaluacion siempre permanece a nivel de trial.
@@ -83,7 +84,8 @@ variabilidad entre semillas se informan por separado. Cada contraste incluye la 
 rank-biserial pareada, cuyo signo sigue la diferencia indicada en la tabla.
 
 La augmentacion usa Wilcoxon pareado sobre deltas por sujeto promediados entre semillas. La familia
-de Holm contiene las comparaciones `overlap-center` y `nonoverlap-center` de los cinco modelos.
+de Holm contiene las comparaciones `nonoverlap-center_x2` y `overlap-center_x6` de los cinco
+modelos.
 
 ## Criterios de cierre de feedback
 

@@ -49,9 +49,7 @@ def test_environment_identity_records_scientific_dependencies() -> None:
         "scipy",
         "BCI2kReader",
     } <= set(versions)
-    assert "9e8ecc3fcde58d2b41c2d2fcd8d23d88b412c08d" in str(
-        versions["BCI2kReader_direct_url"]
-    )
+    assert "9e8ecc3fcde58d2b41c2d2fcd8d23d88b412c08d" in str(versions["BCI2kReader_direct_url"])
 
 
 def test_git_revision_is_metadata_not_part_of_operational_fingerprint(monkeypatch) -> None:
