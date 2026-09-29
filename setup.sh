@@ -30,7 +30,7 @@ if [[ ! -f "${MI_DIR}/S02.mat" ]]; then
     echo "MI-OpenBCI directory exists but S02.mat is missing: ${MI_DIR}" >&2
     exit 1
   fi
-  git clone --depth 1 https://github.com/ProMABLab/Database-MIOpenBCI.git "${MI_DIR}"
+  git clone --depth 1 https://github.com/NiCALab-IMAL/Database-MIOpenBCI.git "${MI_DIR}"
 fi
 
 while IFS=$'\t' read -r subject url expected_sha note; do
