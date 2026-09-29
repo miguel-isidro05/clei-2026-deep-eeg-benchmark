@@ -123,8 +123,7 @@ def main() -> None:
     lines = [
         r"\subsection{Decoder performance}",
         "",
-        "Tables~\\ref{tab:peterson-results},~\\ref{tab:souza-results}, and "
-        "~\\ref{tab:external-results} report "
+        "Tables~\\ref{tab:peterson-results} and~\\ref{tab:souza-results} report "
         "participant-level mean $\\pm$ standard deviation after averaging the five optimization "
         "seeds within participant. The primary paired inference follows in "
         "Table~\\ref{tab:primary-paired-results}; all protocol-specific contrasts remain in "
@@ -139,11 +138,6 @@ def main() -> None:
             "Souza2023 full-trial performance. Values are participant-level mean $\\pm$ SD.",
             "tab:souza-results",
             _performance_rows(descriptive, {"Souza2023"}),
-        ),
-        *_table_block(
-            "External full-trial performance. Values are participant-level mean $\\pm$ SD.",
-            "tab:external-results",
-            _performance_rows(descriptive, {"Zhou2020", "Tavakolan2017"}),
         ),
         r"\subsection{Primary paired model comparisons}",
         "",

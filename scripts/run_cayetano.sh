@@ -20,7 +20,7 @@ echo "git_revision=$(git rev-parse HEAD)"
 python -u scripts/preflight.py --require-cuda --min-cuda-devices 2 \
   --quality-output-dir "${RESULTS_ROOT}/quality"
 python -u scripts/audit_signal_quality.py \
-  --datasets MI-OpenBCI Souza2023 Zhou2020 Tavakolan2017 \
+  --datasets MI-OpenBCI Souza2023 \
   --output-dir "${RESULTS_ROOT}/quality"
 python -u scripts/run_paper.py --phase all --plan-only --output-dir "${RESULTS_ROOT}"
 
@@ -32,19 +32,6 @@ primary_failed=0
 wait "${peterson_gpu0}" || primary_failed=1
 wait "${souza_gpu1}" || primary_failed=1
 if [[ "${primary_failed}" -ne 0 ]]; then
-  exit 1
-fi
-
-python -u scripts/run_paper.py --phase external --num-shards 2 --shard-index 0 \
-  --device cuda:0 --output-dir "${RESULTS_ROOT}" &
-external_gpu0=$!
-python -u scripts/run_paper.py --phase external --num-shards 2 --shard-index 1 \
-  --device cuda:1 --output-dir "${RESULTS_ROOT}" &
-external_gpu1=$!
-external_failed=0
-wait "${external_gpu0}" || external_failed=1
-wait "${external_gpu1}" || external_failed=1
-if [[ "${external_failed}" -ne 0 ]]; then
   exit 1
 fi
 

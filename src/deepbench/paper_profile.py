@@ -20,7 +20,7 @@ class PaperBlock(TypedDict):
 
 def paper_blocks(phase: str) -> list[PaperBlock]:
     """Return the predeclared blocks without inspecting any result."""
-    if phase not in {"peterson", "souza", "primary", "external", "ica-sensitivity", "all"}:
+    if phase not in {"peterson", "souza", "primary", "ica-sensitivity", "all"}:
         raise ValueError(f"Unsupported paper phase: {phase}")
     blocks: list[PaperBlock] = []
     if phase in {"peterson", "primary", "all"}:
@@ -56,16 +56,6 @@ def paper_blocks(phase: str) -> list[PaperBlock]:
                     "ica_policy": "none",
                 },
             ]
-        )
-    if phase in {"external", "all"}:
-        blocks.extend(
-            {
-                "dataset": dataset,
-                "protocols": ["within_split", "cross_session"],
-                "conditions": ["full"],
-                "ica_policy": "none",
-            }
-            for dataset in ("Zhou2020", "Tavakolan2017")
         )
     if phase in {"ica-sensitivity", "all"}:
         blocks.extend(

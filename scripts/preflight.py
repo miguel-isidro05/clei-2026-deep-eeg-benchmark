@@ -24,7 +24,6 @@ from deepbench.config import (
 from deepbench.datasets import (
     duplicate_file_groups,
     load_subject,
-    validate_dataset_dependencies,
 )
 from deepbench.io import write_json_atomic
 from deepbench.models import make_module, parameter_count
@@ -49,7 +48,6 @@ def main() -> None:
     print(f"device={get_device()} torch={torch.__version__}")
     if torch.cuda.is_available():
         print(f"cuda_device={torch.cuda.get_device_name(0)}")
-    validate_dataset_dependencies("Tavakolan2017")
     for package in (
         "braindecode",
         "moabb",
@@ -57,7 +55,6 @@ def main() -> None:
         "skorch",
         "scipy",
         "statsmodels",
-        "BCI2kReader",
     ):
         print(f"{package}={importlib.metadata.version(package)}")
     data_dir = resolve_mi_data_dir()

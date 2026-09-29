@@ -10,10 +10,6 @@ estadistica.
 - MI-OpenBCI: dataset low-cost principal, motor imagery frente a rest.
 - Souza2023: segundo dataset low-cost, mano izquierda frente a mano derecha. Se usan los cinco
   sujetos válidos `002`–`006`, con cuatro corridas por sujeto.
-- Zhou2020: validacion research-grade task-matched, right hand frente a rest y siete sesiones.
-- Tavakolan2017: validacion research-grade task-matched, right hand frente a rest, con cuatro
-  sesiones y un costo computacional manejable.
-- AlexMI: prueba rapida de instalacion, no resultado principal.
 
 Los resultados entre datasets se reportan por separado. No deben interpretarse como una estimacion
 causal del efecto de usar hardware low-cost, porque las tareas, sujetos y protocolos de adquisicion
@@ -42,28 +38,26 @@ Si los datos ya están instalados en rutas externas, puede definirlos manualment
 ```bash
 export CLEI_DATA_DIR=/datos/Database-MIOpenBCI-main
 export SOUZA_DATA_DIR=/datos/souza2023
-export MNE_DATA=/datos/mne
 python scripts/preflight.py --require-cuda --min-cuda-devices 2
-python scripts/download_moabb.py --datasets Zhou2020 Tavakolan2017
 ```
 
-No suba los datasets al repositorio. MOABB conserva sus descargas en `MNE_DATA` y las reutiliza.
+No suba los datasets al repositorio.
 
 ## Validacion corta antes del computo completo
 
-Esta prueba descarga y entrena solo un sujeto de AlexMI durante una epoca:
+Esta prueba entrena un sujeto de MI-OpenBCI durante tres epocas en una carpeta separada:
 
 ```bash
 python scripts/run_experiments.py \
-  --dataset AlexMI \
-  --subjects 1 \
-  --models EEGNet \
+  --dataset MI-OpenBCI \
+  --subjects S02 \
+  --models EEGNet FBCNet ShallowConvNet EEGConformer EEGInceptionMI \
   --protocols within_split \
   --conditions full \
   --seeds 0 \
-  --epochs 1 \
+  --epochs 3 \
   --ica-policy none \
-  --device cuda
+  --device cuda --output-dir results_pilot
 ```
 
 Después ejecute las pruebas del repositorio:
@@ -71,16 +65,6 @@ Después ejecute las pruebas del repositorio:
 ```bash
 pytest
 ruff check .
-```
-
-Antes de la matriz completa, valide también el lector y las cuatro sesiones de Tavakolan con una
-sola celda de una época:
-
-```bash
-python scripts/run_experiments.py \
-  --dataset Tavakolan2017 --subjects 1 --models EEGNet \
-  --protocols within_split --conditions full --seeds 0 --epochs 1 \
-  --ica-policy none --device cuda --output-dir results_tavakolan_pilot
 ```
 
 ## Perfil completo del paper
@@ -99,7 +83,6 @@ No use `--overwrite` al reanudar. La ejecución manual equivalente es:
 python scripts/run_paper.py --phase all --plan-only
 python scripts/run_paper.py --phase peterson --device cuda:0
 python scripts/run_paper.py --phase souza --device cuda:1
-python scripts/run_paper.py --phase external --device cuda
 python scripts/run_paper.py --phase ica-sensitivity --device cuda
 python scripts/profile_latency.py --device cuda
 python scripts/run_statistics.py
@@ -115,27 +98,18 @@ salidas descriptivas marcadas como exploratorias y nunca tablas Wilcoxon-Holm.
 
 `primary` reúne los bloques separados `peterson` y `souza`. Ambos ejecutan trials completos, split
 estratificado 70/30, cinco folds within-session, LOSO y el experimento de ventanas. Souza2023 añade
-leave-one-run-out como `cross_session`. `external` ejecuta por separado el
-baseline 70/30 y leave-one-session-out en Zhou2020 y Tavakolan2017, tambien sin ICA.
+leave-one-run-out como `cross_session`.
 `ica-sensitivity` repite el bloque 70/30 de los dos datasets low-cost con la politica exploratoria
 de kurtosis.
 
-El perfil completo contiene 4.725 celdas. El numero de entrenamientos es mayor que el numero de
-celdas porque `within_session` y `cross_session` contienen varios folds. Cada celda externa contiene un baseline
-`within_split` y un fold por sesion retenida para `cross_session`; `within_session` de cinco folds
+El perfil completo contiene 3.125 celdas. El numero de entrenamientos es mayor que el numero de
+celdas porque `within_session` y `cross_session` contienen varios folds. `within_session` de cinco folds
 se ejecuta en ambos datasets low-cost. Antes de lanzarlo, mida una muestra pequena con 3 a 5 epochs en otro
 directorio y estime el
 tiempo de 300 epochs. Si hay varias GPU o PCs que comparten la carpeta de resultados, divida los
 sujetos sin solaparlos solo cuando todas usan la misma version del codigo, entorno, tipo de
 dispositivo y modelo de GPU. No combine hardware heterogeneo en una misma corrida confirmatoria:
 la validacion estadistica lo rechazara.
-
-```bash
-# Proceso/GPU 0
-python scripts/run_paper.py --phase external --num-shards 2 --shard-index 0 --device cuda
-# Proceso/GPU 1
-python scripts/run_paper.py --phase external --num-shards 2 --shard-index 1 --device cuda
-```
 
 Cada fold terminado se guarda en `results/fold_cache`, por lo que una interrupcion dentro de una
 celda multisesion no obliga a repetir los folds ya finalizados. Una celda existente solo se omite si

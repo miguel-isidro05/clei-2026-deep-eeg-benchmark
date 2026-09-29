@@ -13,7 +13,7 @@ from .models import recipe_dict
 from .paper_profile import paper_profile_metadata
 from .runner import _code_fingerprint, cell_path
 
-REQUIRED_PHASES = {"primary", "external", "ica-sensitivity"}
+REQUIRED_PHASES = {"primary", "ica-sensitivity"}
 
 
 def _json_canonical(value: object) -> str:
@@ -139,8 +139,8 @@ def audit_expected_cells(results_dir: Path) -> tuple[pd.DataFrame, bool, list[st
         issues.append("No paper expectation manifest was found")
     elif "all" not in phases and not REQUIRED_PHASES.issubset(phases):
         issues.append(
-            "Incomplete paper phase coverage: require phase='all' or primary, external, "
-            "and ica-sensitivity manifests"
+            "Incomplete paper phase coverage: require phase='all' or primary and "
+            "ica-sensitivity manifests"
         )
 
     missing = expected - present

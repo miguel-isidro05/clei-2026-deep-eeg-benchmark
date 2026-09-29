@@ -42,8 +42,6 @@ def _write_valid_artifacts(root: Path) -> None:
     for dataset, protocol in (
         ("MI-OpenBCI", "within_session"),
         ("Souza2023", "within_session"),
-        ("Zhou2020", "cross_session"),
-        ("Tavakolan2017", "cross_session"),
     ):
         for model in MODEL_NAMES:
             for metric in ("accuracy", "kappa"):

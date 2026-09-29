@@ -18,7 +18,7 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "--phase",
-        choices=("peterson", "souza", "primary", "external", "ica-sensitivity", "all"),
+        choices=("peterson", "souza", "primary", "ica-sensitivity", "all"),
         default="all",
     )
     parser.add_argument("--device", default=get_device())
@@ -44,7 +44,7 @@ def main() -> None:
     if args.num_shards > 1 and args.phase in {"peterson", "souza", "primary", "all"}:
         raise SystemExit(
             "Subject sharding is disabled for the primary phase because LOSO requires the full "
-            "training cohort. Shard only external or ica-sensitivity."
+            "training cohort. Shard only ica-sensitivity."
         )
     write_manifest(
         args.output_dir

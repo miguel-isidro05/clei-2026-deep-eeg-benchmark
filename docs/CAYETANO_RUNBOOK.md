@@ -12,10 +12,8 @@ El adjunto público 42 es una copia exacta del sujeto `004`; no es un sujeto `00
 instalador lo deja en cuarentena. Souza2023 se ejecuta únicamente con `002`–`006`. No renombre ni
 duplique el archivo 004 y no cree un `001.edf`.
 
-`Tavakolan2017` usa el lector BCI2000 que MOABB importa de forma opcional. El proyecto lo fija a
-un commit exacto de su repositorio oficial y `preflight.py` comprueba su presencia antes de
-descargar o entrenar. Si el entorno ya existia, actualicelo con
-`python -m pip install -e '.[dev]'`.
+El flujo confirmatorio usa solo MI-OpenBCI/Peterson y Souza2023. No descarga ni ejecuta datasets
+externos de MOABB.
 
 ## 2. Piloto temporal separado
 
@@ -41,14 +39,6 @@ python scripts/run_experiments.py --dataset Souza2023 --subjects 002 \
 Revise `nvidia-smi`, el tiempo de cada epoch en `training_history` y el espacio en disco. Multiplique
 el tiempo observado de forma conservadora antes de lanzar 300 epochs.
 
-Valide por separado el lector BCI2000 y las cuatro sesiones externas:
-
-```bash
-python scripts/run_experiments.py --dataset Tavakolan2017 --subjects 1 \
-  --models EEGNet --protocols within_split --conditions full --seeds 0 --epochs 1 \
-  --ica-policy none --device cuda --output-dir results_tavakolan_pilot
-```
-
 ## 3. Corrida paper
 
 La forma recomendada en la RTX A6000 doble es el script completo, porque guarda consola y resumen:
@@ -65,7 +55,6 @@ manualmente, use cada fase por separado dentro de `tmux`, `screen` o un job pers
 python scripts/run_paper.py --phase all --plan-only
 python scripts/run_paper.py --phase peterson --device cuda:0
 python scripts/run_paper.py --phase souza --device cuda:1
-python scripts/run_paper.py --phase external --device cuda
 python scripts/run_paper.py --phase ica-sensitivity --device cuda
 ```
 
@@ -90,7 +79,7 @@ ruff check .
 
 No considere lista la corrida si `run_statistics.py` devuelve error, si existe un `present=False`
 o un `expected=False` en `expected_cell_audit.csv`, o si existe un `complete=False` en
-`completeness.csv`. El análisis confirmatorio también exige el manifiesto `--phase all` o los tres
+`completeness.csv`. El análisis confirmatorio también exige el manifiesto `--phase all` o los dos
 manifiestos de fase. Conserve juntos
 `results/cells`, `results/manifests`, `results/statistics`, `results/quality`, `results/latency`,
 `results/figures`, `results/logs` y `results/EXPERIMENT_LOG.md`.

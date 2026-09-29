@@ -8,8 +8,7 @@ ENV_NAME="${CLEI_CONDA_ENV:-deep-eeg-clei}"
 DATA_ROOT="${CLEI_DATA_ROOT:-${PROJECT_ROOT}/data}"
 MI_DIR="${CLEI_DATA_DIR:-${DATA_ROOT}/mi-openbci}"
 SOUZA_DIR="${SOUZA_DATA_DIR:-${DATA_ROOT}/souza2023}"
-MNE_DIR="${MNE_DATA:-${DATA_ROOT}/mne}"
-mkdir -p "${DATA_ROOT}" "${SOUZA_DIR}" "${SOUZA_DIR}/quarantine" "${MNE_DIR}"
+mkdir -p "${DATA_ROOT}" "${SOUZA_DIR}" "${SOUZA_DIR}/quarantine"
 
 if ! command -v conda >/dev/null 2>&1; then
   echo "conda is required. Install Miniconda before running setup.sh." >&2
@@ -54,15 +53,11 @@ done < configs/souza2023_downloads.tsv
 
 export CLEI_DATA_DIR="${MI_DIR}"
 export SOUZA_DATA_DIR="${SOUZA_DIR}"
-export MNE_DATA="${MNE_DIR}"
 conda env config vars set -n "${ENV_NAME}" \
-  CLEI_DATA_DIR="${MI_DIR}" SOUZA_DATA_DIR="${SOUZA_DIR}" MNE_DATA="${MNE_DIR}"
+  CLEI_DATA_DIR="${MI_DIR}" SOUZA_DATA_DIR="${SOUZA_DIR}"
 
 conda run -n "${ENV_NAME}" python scripts/validate_souza2023.py \
   --data-dir "${SOUZA_DIR}"
-
-conda run -n "${ENV_NAME}" python scripts/download_moabb.py \
-  --datasets Zhou2020 Tavakolan2017
 
 preflight_args=()
 if [[ "${CAYETANO:-0}" == "1" ]]; then
@@ -75,5 +70,4 @@ cat <<EOF
 setup=OK
 export CLEI_DATA_DIR='${MI_DIR}'
 export SOUZA_DATA_DIR='${SOUZA_DIR}'
-export MNE_DATA='${MNE_DIR}'
 EOF

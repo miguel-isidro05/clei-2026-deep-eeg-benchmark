@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import pytest
+
 from deepbench.config import PAPER_EPOCHS
 from deepbench.paper_profile import paper_blocks
 
@@ -36,10 +38,16 @@ def test_primary_combines_both_low_cost_datasets_as_separate_blocks() -> None:
     }
 
 
-def test_external_profile_uses_only_task_matched_multisession_datasets() -> None:
-    blocks = paper_blocks("external")
-    assert {block["dataset"] for block in blocks} == {"Zhou2020", "Tavakolan2017"}
-    assert all(block["protocols"] == ["within_split", "cross_session"] for block in blocks)
+def test_all_profile_is_limited_to_the_two_requested_datasets() -> None:
+    assert {block["dataset"] for block in paper_blocks("all")} == {
+        "MI-OpenBCI",
+        "Souza2023",
+    }
+
+
+def test_external_phase_is_not_part_of_the_frozen_profile() -> None:
+    with pytest.raises(ValueError, match="Unsupported paper phase"):
+        paper_blocks("external")
 
 
 def test_augmentation_profile_uses_compute_matched_controls() -> None:
