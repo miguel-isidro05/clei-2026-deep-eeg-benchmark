@@ -68,7 +68,7 @@ def _write_valid_artifacts(root: Path) -> None:
             "metric": "accuracy",
             "model_a": model_a,
             "model_b": model_b,
-            "n_subjects": 10 if dataset == "MI-OpenBCI" else 6,
+            "n_subjects": 10 if dataset == "MI-OpenBCI" else 5,
             "mean_difference_a_minus_b": 0.01,
             "difference_ci95_low": -0.02,
             "difference_ci95_high": 0.04,

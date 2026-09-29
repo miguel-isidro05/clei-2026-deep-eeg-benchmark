@@ -5,7 +5,8 @@
 El benchmark trata los dos datasets low-cost como experimentos independientes:
 
 - `MI-OpenBCI`: imaginacion motora frente a reposo, 10 participantes y 15 canales.
-- `Souza2023`: mano izquierda frente a mano derecha, 6 participantes, 16 canales y 4 corridas por participante.
+- `Souza2023`: mano izquierda frente a mano derecha, 5 participantes válidos (`002`–`006`), 16
+  canales y 4 corridas por participante.
 
 Las metricas, familias estadisticas, figuras y tablas deben conservar las columnas `dataset` y
 `task`. No se combinan observaciones de ambos datasets ni se interpreta su diferencia como efecto
@@ -47,10 +48,9 @@ El sitio del articulo ofrece seis enlaces, pero los adjuntos `42` y `45` son cop
 sujeto `004` y tienen la misma huella SHA-256. El enlace `42` no puede usarse como sujeto `001`.
 
 `setup.sh` conserva los enlaces suministrados, descarga los archivos y ejecuta una validacion de
-identidad, estructura y duplicados. La corrida confirmatoria exige `001.edf` a `006.edf` unicos.
-Mientras el editor no corrija el adjunto, pueden ejecutarse pilotos con `002` a `006`; el modo
-completo termina con error. La variable `SOUZA_001_URL` permite proporcionar una URL corregida sin
-editar el codigo.
+identidad, estructura y duplicados. El adjunto 42 se guarda en cuarentena como evidencia y queda
+fuera del análisis. La cohorte ejecutable y confirmatoria contiene únicamente `002`–`006`. El flujo
+no busca ni admite un sustituto para `001.edf`.
 
 ## Operacion en Cayetano
 

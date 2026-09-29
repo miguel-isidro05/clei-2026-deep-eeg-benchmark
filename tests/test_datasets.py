@@ -6,7 +6,12 @@ from dataclasses import dataclass
 import numpy as np
 import pytest
 
-from deepbench.config import DATASET_SPECS, SOUZA_CHANNELS, SOUZA_SUBJECTS
+from deepbench.config import (
+    DATASET_SPECS,
+    SOUZA_CHANNELS,
+    SOUZA_PUBLISHED_SUBJECTS,
+    SOUZA_SUBJECTS,
+)
 from deepbench.datasets import (
     _make_moabb_dataset,
     duplicate_file_groups,
@@ -74,7 +79,8 @@ def test_souza_spec_preserves_left_right_task_and_run_sessions() -> None:
     assert spec.task == "left_hand_vs_right_hand"
     assert spec.multi_session is True
     assert spec.trial_seconds == 3.0
-    assert SOUZA_SUBJECTS == ("001", "002", "003", "004", "005", "006")
+    assert SOUZA_PUBLISHED_SUBJECTS == ("001", "002", "003", "004", "005", "006")
+    assert SOUZA_SUBJECTS == ("002", "003", "004", "005", "006")
 
 
 def test_souza_loader_uses_exec_events_and_new_run_sessions(tmp_path, monkeypatch) -> None:
@@ -94,14 +100,10 @@ def test_souza_loader_uses_exec_events_and_new_run_sessions(tmp_path, monkeypatc
     assert recording.loader_bandpass_hz is None
 
 
-def test_souza_loader_rejects_mismatched_edf_identity(tmp_path, monkeypatch) -> None:
-    (tmp_path / "001.edf").write_bytes(b"synthetic-edf-placeholder")
+def test_souza_loader_rejects_excluded_subject_001(tmp_path, monkeypatch) -> None:
     monkeypatch.setenv("SOUZA_DATA_DIR", str(tmp_path))
-    monkeypatch.setattr(
-        "mne.io.read_raw_edf", lambda *_args, **_kwargs: FakeSouzaRaw(subject="004")
-    )
 
-    with pytest.raises(ValueError, match="declares subject 004"):
+    with pytest.raises(ValueError, match="Unknown Souza2023 subject: 001"):
         load_souza_subject("001")
 
 
@@ -110,4 +112,4 @@ def test_duplicate_file_groups_reports_identical_subject_files(tmp_path) -> None
     (tmp_path / "004.edf").write_bytes(b"duplicate")
     (tmp_path / "002.edf").write_bytes(b"unique")
 
-    assert duplicate_file_groups(tmp_path, SOUZA_SUBJECTS) == [("001", "004")]
+    assert duplicate_file_groups(tmp_path, SOUZA_PUBLISHED_SUBJECTS) == [("001", "004")]

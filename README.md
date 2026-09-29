@@ -8,8 +8,8 @@ estadistica.
 ## Datasets y alcance
 
 - MI-OpenBCI: dataset low-cost principal, motor imagery frente a rest.
-- Souza2023: segundo dataset low-cost, mano izquierda frente a mano derecha, con seis sujetos y
-  cuatro corridas por sujeto.
+- Souza2023: segundo dataset low-cost, mano izquierda frente a mano derecha. Se usan los cinco
+  sujetos válidos `002`–`006`, con cuatro corridas por sujeto.
 - Zhou2020: validacion research-grade task-matched, right hand frente a rest y siete sesiones.
 - Tavakolan2017: validacion research-grade task-matched, right hand frente a rest, con cuatro
   sesiones y un costo computacional manejable.
@@ -27,22 +27,15 @@ descarga los datasets y ejecuta el preflight:
 ```bash
 git clone https://github.com/miguel-isidro05/clei-2026-deep-eeg-benchmark.git
 cd clei-2026-deep-eeg-benchmark
-SOUZA_001_URL='URL_CORREGIDA_DE_001.edf' CAYETANO=1 bash setup.sh
+CAYETANO=1 bash setup.sh
 conda activate deep-eeg-clei
 bash run_cayetano.sh
 ```
 
 El sitio de Souza2023 publica el mismo EDF en los adjuntos 42 y 45; ambos son el sujeto `004` y
-tienen la misma huella SHA-256. `setup.sh` conserva el adjunto 42 en cuarentena y bloquea la corrida
-completa mientras falte `001.edf`. Cuando exista una fuente corregida, pásela mediante
-`SOUZA_001_URL`. Los seis enlaces y sus huellas están en `configs/souza2023_downloads.tsv`.
-
-Para instalar y ejecutar pilotos con los cinco sujetos únicos disponibles:
-
-```bash
-ALLOW_INCOMPLETE_SOUZA=1 bash setup.sh
-conda activate deep-eeg-clei
-```
+tienen la misma huella SHA-256. `setup.sh` conserva el adjunto 42 en cuarentena y ejecuta Souza2023
+únicamente con `002`–`006`. No se usa, sustituye ni busca un archivo `001.edf`. Los seis enlaces y
+sus huellas están en `configs/souza2023_downloads.tsv`.
 
 Si los datos ya están instalados en rutas externas, puede definirlos manualmente:
 
@@ -127,7 +120,7 @@ baseline 70/30 y leave-one-session-out en Zhou2020 y Tavakolan2017, tambien sin 
 `ica-sensitivity` repite el bloque 70/30 de los dos datasets low-cost con la politica exploratoria
 de kurtosis.
 
-El perfil completo contiene 4.950 celdas. El numero de entrenamientos es mayor que el numero de
+El perfil completo contiene 4.725 celdas. El numero de entrenamientos es mayor que el numero de
 celdas porque `within_session` y `cross_session` contienen varios folds. Cada celda externa contiene un baseline
 `within_split` y un fold por sesion retenida para `cross_session`; `within_session` de cinco folds
 se ejecuta en ambos datasets low-cost. Antes de lanzarlo, mida una muestra pequena con 3 a 5 epochs en otro

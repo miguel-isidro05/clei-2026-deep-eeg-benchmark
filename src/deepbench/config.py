@@ -15,7 +15,7 @@ MODEL_NAMES: tuple[str, ...] = (
 )
 PAPER_SEEDS: tuple[int, ...] = (0, 1, 2, 3, 4)
 PAPER_EPOCHS = 300
-PAPER_PROFILE_VERSION = "clei2026-deep-v4"
+PAPER_PROFILE_VERSION = "clei2026-deep-v5"
 SPLIT_SEED = 2026
 TARGET_SFREQ = 128.0
 TRIAL_SECONDS = 4.0
@@ -58,7 +58,8 @@ MI_SUBJECTS: tuple[str, ...] = (
     "S10",
     "S12",
 )
-SOUZA_SUBJECTS: tuple[str, ...] = ("001", "002", "003", "004", "005", "006")
+SOUZA_PUBLISHED_SUBJECTS: tuple[str, ...] = ("001", "002", "003", "004", "005", "006")
+SOUZA_SUBJECTS: tuple[str, ...] = ("002", "003", "004", "005", "006")
 SOUZA_CHANNELS: tuple[str, ...] = (
     "Fp1",
     "Fz",

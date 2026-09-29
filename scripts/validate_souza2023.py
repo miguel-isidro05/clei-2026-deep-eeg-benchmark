@@ -30,9 +30,8 @@ def main() -> None:
         raise SystemExit(f"Souza2023 contains byte-identical subject files: {formatted}")
     if missing and not args.allow_incomplete:
         raise SystemExit(
-            f"Souza2023 is incomplete in {data_dir}; missing {missing}. "
-            "The public attachment 42 duplicates subject 004. Set SOUZA_001_URL to a corrected "
-            "source and rerun setup.sh."
+            f"Souza2023 is incomplete in {data_dir}; missing valid subjects {missing}. "
+            "The executable cohort is fixed to subjects 002-006."
         )
     if not present:
         raise SystemExit(f"No Souza2023 EDF files found in {data_dir}")
@@ -40,6 +39,9 @@ def main() -> None:
     payload = {
         "status": "complete" if not missing else "incomplete",
         "data_dir": str(data_dir),
+        "excluded_subjects": {
+            "001": "public attachment 42 is byte-identical to subject 004"
+        },
         "present_subjects": present,
         "missing_subjects": missing,
         "duplicate_groups": duplicates,

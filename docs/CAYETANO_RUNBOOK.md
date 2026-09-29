@@ -4,13 +4,13 @@
 
 1. Instalar Git, Miniconda, `wget` y el driver NVIDIA. Confirmar `nvidia-smi`.
 2. Clonar el repositorio.
-3. Ejecutar `SOUZA_001_URL='URL_CORREGIDA' CAYETANO=1 bash setup.sh`.
+3. Ejecutar `CAYETANO=1 bash setup.sh`.
 4. Activar `deep-eeg-clei`.
 5. No continuar si el instalador no termina en `setup=OK` y `preflight=OK`.
 
 El adjunto público 42 es una copia exacta del sujeto `004`; no es un sujeto `001` válido. El
-instalador lo deja en cuarentena y exige una URL corregida para una corrida confirmatoria. No
-renombre ni duplique el archivo 004.
+instalador lo deja en cuarentena. Souza2023 se ejecuta únicamente con `002`–`006`. No renombre ni
+duplique el archivo 004 y no cree un `001.edf`.
 
 `Tavakolan2017` usa el lector BCI2000 que MOABB importa de forma opcional. El proyecto lo fija a
 un commit exacto de su repositorio oficial y `preflight.py` comprueba su presencia antes de
