@@ -8,7 +8,9 @@ El benchmark evalua cinco decoders deep bajo protocolos identicos y separa tres 
 2. Transferencia entre sesiones del mismo sujeto.
 3. Transferencia a sujetos no observados cuando el dataset lo permite.
 
-MI-OpenBCI es el dataset low-cost principal. Zhou2020 aporta una tarea research-grade comparable,
+MI-OpenBCI y Souza2023 son datasets low-cost primarios que se analizan por separado. El primero
+evalua imaginacion motora frente a reposo; el segundo evalua mano izquierda frente a derecha.
+Zhou2020 aporta una tarea research-grade comparable,
 right-hand motor imagery frente a rest, con siete sesiones. Tavakolan2017 aporta la misma
 comparacion right-hand frente a rest, cuatro sesiones y una cohorte de 12 sujetos con menor costo
 computacional. Las diferencias
@@ -41,11 +43,13 @@ referencia metodologica, pero no define el conjunto final de modelos de esta rev
 - Banda final 8 a 30 Hz.
 - Remuestreo a 128 Hz.
 - Épocas fijadas por dataset: cuatro segundos (512 muestras) para MI-OpenBCI y Zhou2020, y tres
-  segundos (384 muestras) para Tavakolan2017. Todos los modelos reciben exactamente el mismo
+  segundos (384 muestras) para Souza2023 y Tavakolan2017. En Souza2023, la ventana comienza en
+  `LeftExec` o `RightExec`; tres segundos evitan incluir el periodo `Resting` indicado por los EDF.
+  Todos los modelos reciben exactamente el mismo
   soporte temporal dentro de cada dataset.
 - Z-score por canal calculado solo en training.
 - MOABB aplica la banda inicial 1-40 Hz durante la carga. El preprocesamiento registra ese origen
-  y no repite el mismo filtro; MI-OpenBCI recibe la banda inicial dentro de cada fold.
+  y no repite el mismo filtro; MI-OpenBCI y Souza2023 reciben la banda inicial dentro de cada fold.
 
 Cada fold de sensibilidad guarda convergencia, iteraciones, seed, kurtosis, candidatos y
 componentes excluidos. No existe seleccion manual. Esta condicion no se describe como

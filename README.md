@@ -8,6 +8,8 @@ estadistica.
 ## Datasets y alcance
 
 - MI-OpenBCI: dataset low-cost principal, motor imagery frente a rest.
+- Souza2023: segundo dataset low-cost, mano izquierda frente a mano derecha, con seis sujetos y
+  cuatro corridas por sujeto.
 - Zhou2020: validacion research-grade task-matched, right hand frente a rest y siete sesiones.
 - Tavakolan2017: validacion research-grade task-matched, right hand frente a rest, con cuatro
   sesiones y un costo computacional manejable.
@@ -19,28 +21,34 @@ no son identicos.
 
 ## Instalacion en la PC de Cayetano
 
-Se recomienda Ubuntu o WSL2 con una GPU NVIDIA y drivers recientes. Desde una terminal:
+Se recomienda Ubuntu o WSL2 con dos GPU NVIDIA y drivers recientes. El instalador crea el entorno,
+descarga los datasets y ejecuta el preflight:
 
 ```bash
 git clone https://github.com/miguel-isidro05/clei-2026-deep-eeg-benchmark.git
 cd clei-2026-deep-eeg-benchmark
-conda env create -f environment.yml
+SOUZA_001_URL='URL_CORREGIDA_DE_001.edf' CAYETANO=1 bash setup.sh
+conda activate deep-eeg-clei
+bash run_cayetano.sh
+```
+
+El sitio de Souza2023 publica el mismo EDF en los adjuntos 42 y 45; ambos son el sujeto `004` y
+tienen la misma huella SHA-256. `setup.sh` conserva el adjunto 42 en cuarentena y bloquea la corrida
+completa mientras falte `001.edf`. Cuando exista una fuente corregida, pásela mediante
+`SOUZA_001_URL`. Los seis enlaces y sus huellas están en `configs/souza2023_downloads.tsv`.
+
+Para instalar y ejecutar pilotos con los cinco sujetos únicos disponibles:
+
+```bash
+ALLOW_INCOMPLETE_SOUZA=1 bash setup.sh
 conda activate deep-eeg-clei
 ```
 
-En PowerShell, luego de copiar los archivos MAT de MI-OpenBCI a una carpeta local:
-
-```powershell
-$env:CLEI_DATA_DIR="D:\datos\Database-MIOpenBCI-main"
-$env:MNE_DATA="D:\datos\mne"
-python scripts\preflight.py --require-cuda --min-cuda-devices 2
-python scripts\download_moabb.py --datasets Zhou2020 Tavakolan2017
-```
-
-En Linux o WSL2:
+Si los datos ya están instalados en rutas externas, puede definirlos manualmente:
 
 ```bash
 export CLEI_DATA_DIR=/datos/Database-MIOpenBCI-main
+export SOUZA_DATA_DIR=/datos/souza2023
 export MNE_DATA=/datos/mne
 python scripts/preflight.py --require-cuda --min-cuda-devices 2
 python scripts/download_moabb.py --datasets Zhou2020 Tavakolan2017
@@ -89,14 +97,15 @@ recomendada usa las dos GPU, conserva la consola completa y genera tablas, figur
 LaTeX de resultados:
 
 ```bash
-bash scripts/run_cayetano.sh
+bash run_cayetano.sh
 ```
 
 No use `--overwrite` al reanudar. La ejecución manual equivalente es:
 
 ```bash
 python scripts/run_paper.py --phase all --plan-only
-python scripts/run_paper.py --phase primary --device cuda
+python scripts/run_paper.py --phase peterson --device cuda:0
+python scripts/run_paper.py --phase souza --device cuda:1
 python scripts/run_paper.py --phase external --device cuda
 python scripts/run_paper.py --phase ica-sensitivity --device cuda
 python scripts/profile_latency.py --device cuda
@@ -111,15 +120,17 @@ del perfil y el conjunto de celdas presentes coincide exactamente con el esperad
 con fases faltantes, celdas faltantes o celdas extra, se detiene. `--allow-incomplete` produce solo
 salidas descriptivas marcadas como exploratorias y nunca tablas Wilcoxon-Holm.
 
-`primary` ejecuta MI-OpenBCI sin ICA, con trials completos, split estratificado 70/30, cinco folds
-within-session, LOSO y el experimento separado de ventanas. `external` ejecuta por separado el
+`primary` reúne los bloques separados `peterson` y `souza`. Ambos ejecutan trials completos, split
+estratificado 70/30, cinco folds within-session, LOSO y el experimento de ventanas. Souza2023 añade
+leave-one-run-out como `cross_session`. `external` ejecuta por separado el
 baseline 70/30 y leave-one-session-out en Zhou2020 y Tavakolan2017, tambien sin ICA.
-`ica-sensitivity` repite el bloque principal 70/30 con la politica exploratoria de kurtosis.
+`ica-sensitivity` repite el bloque 70/30 de los dos datasets low-cost con la politica exploratoria
+de kurtosis.
 
-El perfil completo contiene 3.600 celdas. El numero de entrenamientos es mayor que el numero de
+El perfil completo contiene 4.950 celdas. El numero de entrenamientos es mayor que el numero de
 celdas porque `within_session` y `cross_session` contienen varios folds. Cada celda externa contiene un baseline
 `within_split` y un fold por sesion retenida para `cross_session`; `within_session` de cinco folds
-se ejecuta en MI-OpenBCI. Antes de lanzarlo, mida una muestra pequena con 3 a 5 epochs en otro
+se ejecuta en ambos datasets low-cost. Antes de lanzarlo, mida una muestra pequena con 3 a 5 epochs en otro
 directorio y estime el
 tiempo de 300 epochs. Si hay varias GPU o PCs que comparten la carpeta de resultados, divida los
 sujetos sin solaparlos solo cuando todas usan la misma version del codigo, entorno, tipo de

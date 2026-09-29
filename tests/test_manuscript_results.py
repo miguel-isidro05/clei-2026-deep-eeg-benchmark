@@ -41,6 +41,7 @@ def _write_valid_artifacts(root: Path) -> None:
     descriptive = []
     for dataset, protocol in (
         ("MI-OpenBCI", "within_session"),
+        ("Souza2023", "within_session"),
         ("Zhou2020", "cross_session"),
         ("Tavakolan2017", "cross_session"),
     ):
@@ -60,14 +61,14 @@ def _write_valid_artifacts(root: Path) -> None:
                 )
     paired = [
         {
-            "dataset": "MI-OpenBCI",
+            "dataset": dataset,
             "protocol": "within_session",
             "condition": "full",
             "ica_policy": "none",
             "metric": "accuracy",
             "model_a": model_a,
             "model_b": model_b,
-            "n_subjects": 10,
+            "n_subjects": 10 if dataset == "MI-OpenBCI" else 6,
             "mean_difference_a_minus_b": 0.01,
             "difference_ci95_low": -0.02,
             "difference_ci95_high": 0.04,
@@ -76,10 +77,12 @@ def _write_valid_artifacts(root: Path) -> None:
             "p_holm": 0.5,
             "reject_holm_0_05": False,
         }
+        for dataset in ("MI-OpenBCI", "Souza2023")
         for model_a, model_b in combinations(MODEL_NAMES, 2)
     ]
     augmentation = [
         {
+            "dataset": "MI-OpenBCI",
             "metric": "accuracy",
             "model": MODEL_NAMES[0],
             "comparison": "overlap-center_x6",
@@ -114,7 +117,14 @@ def _write_valid_artifacts(root: Path) -> None:
     latency_path = latency / "latency.csv"
     pd.DataFrame(
         [
-            {"model": model, "batch_size": 1, "median_batch_ms": 1.0, "p95_batch_ms": 1.5}
+            {
+                "dataset": dataset,
+                "model": model,
+                "batch_size": 1,
+                "median_batch_ms": 1.0,
+                "p95_batch_ms": 1.5,
+            }
+            for dataset in ("MI-OpenBCI", "Souza2023")
             for model in MODEL_NAMES
         ]
     ).to_csv(latency_path, index=False)
@@ -136,6 +146,8 @@ def _write_valid_artifacts(root: Path) -> None:
         "ica_sensitivity.pdf",
         "model_inference_latency.pdf",
         "primary_confusion_matrices.pdf",
+        "souza_accuracy.pdf",
+        "souza_confusion_matrices.pdf",
     )
     for name in figure_names:
         (figures / name).write_bytes(b"valid-pdf-placeholder")
@@ -167,6 +179,7 @@ def test_manuscript_generation_uses_verified_inferential_artifacts(tmp_path, mon
     assert "$r_{rb}$" in latex
     assert "$p_{Holm}$" in latex
     assert "Compute-matched augmentation" in latex
+    assert "Souza2023 full-trial performance" in latex
 
 
 def test_manuscript_generation_rejects_tampered_statistics(tmp_path, monkeypatch) -> None:

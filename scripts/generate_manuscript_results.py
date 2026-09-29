@@ -123,7 +123,8 @@ def main() -> None:
     lines = [
         r"\subsection{Decoder performance}",
         "",
-        "Tables~\\ref{tab:primary-results} and~\\ref{tab:external-results} report "
+        "Tables~\\ref{tab:peterson-results},~\\ref{tab:souza-results}, and "
+        "~\\ref{tab:external-results} report "
         "participant-level mean $\\pm$ standard deviation after averaging the five optimization "
         "seeds within participant. The primary paired inference follows in "
         "Table~\\ref{tab:primary-paired-results}; all protocol-specific contrasts remain in "
@@ -131,8 +132,13 @@ def main() -> None:
         "",
         *_table_block(
             "MI-OpenBCI full-trial performance. Values are participant-level mean $\\pm$ SD.",
-            "tab:primary-results",
+            "tab:peterson-results",
             _performance_rows(descriptive, {"MI-OpenBCI"}),
+        ),
+        *_table_block(
+            "Souza2023 full-trial performance. Values are participant-level mean $\\pm$ SD.",
+            "tab:souza-results",
+            _performance_rows(descriptive, {"Souza2023"}),
         ),
         *_table_block(
             "External full-trial performance. Values are participant-level mean $\\pm$ SD.",
@@ -142,34 +148,36 @@ def main() -> None:
         r"\subsection{Primary paired model comparisons}",
         "",
         "Table~\\ref{tab:primary-paired-results} reports the prespecified held-out test "
-        "accuracy contrasts for MI-OpenBCI under the primary stratified five-fold "
-        "within-session protocol. Effect sizes are paired rank-biserial correlations with "
+        "accuracy contrasts for each low-cost dataset under the stratified five-fold "
+        "within-session protocol. Each inferential family remains dataset-specific. Effect "
+        "sizes are paired rank-biserial correlations with "
         "the sign of model A minus model B.",
         "",
         r"\begin{table*}[t]",
         r"\caption{Primary paired Wilcoxon comparisons with Holm correction.}",
         r"\label{tab:primary-paired-results}",
         r"\centering\small",
-        r"\begin{tabular}{llrrrrrrrr}",
+        r"\begin{tabular}{lllrrrrrrrr}",
         r"\toprule",
-        "Model A & Model B & $n$ & Mean diff. & 95\\% CI low & 95\\% CI high & "
+        "Dataset & Model A & Model B & $n$ & Mean diff. & 95\\% CI low & 95\\% CI high & "
         "$r_{rb}$ & $p_{raw}$ & $p_{Holm}$ & Reject \\\\",
         r"\midrule",
     ]
     primary_paired = paired.loc[
-        (paired["dataset"] == "MI-OpenBCI")
+        paired["dataset"].isin(["MI-OpenBCI", "Souza2023"])
         & (paired["protocol"] == "within_session")
         & (paired["condition"] == "full")
         & (paired["ica_policy"] == "none")
         & (paired["metric"] == "accuracy")
     ]
-    if len(primary_paired) != 10:
+    if len(primary_paired) != 20:
         raise SystemExit(
-            "Manuscript generation blocked: expected 10 primary pairwise model comparisons"
+            "Manuscript generation blocked: expected 20 low-cost pairwise model comparisons"
         )
     for row in primary_paired.itertuples(index=False):
         lines.append(
-            f"{_escape(row.model_a)} & {_escape(row.model_b)} & {int(row.n_subjects)} & "
+            f"{_escape(row.dataset)} & {_escape(row.model_a)} & {_escape(row.model_b)} & "
+            f"{int(row.n_subjects)} & "
             f"{_number(row.mean_difference_a_minus_b)} & "
             f"{_number(row.difference_ci95_low)} & {_number(row.difference_ci95_high)} & "
             f"{_number(row.rank_biserial_a_minus_b)} & {_number(row.p_raw, 4)} & "
@@ -189,16 +197,18 @@ def main() -> None:
             r"within participant.}",
             r"\label{tab:augmentation-results}",
             r"\centering\small",
-            r"\begin{tabular}{lllrrrrrrrr}",
+            r"\begin{tabular}{llllrrrrrrrr}",
             r"\toprule",
-            "Metric & Model & Contrast & $n$ & Mean diff. & 95\\% CI low & 95\\% CI high & "
+            "Dataset & Metric & Model & Contrast & $n$ & Mean diff. & 95\\% CI low & "
+            "95\\% CI high & "
             "$r_{rb}$ & $p_{raw}$ & $p_{Holm}$ & Reject \\\\",
             r"\midrule",
         ]
     )
     for row in augmentation.itertuples(index=False):
         lines.append(
-            f"{_escape(row.metric)} & {_escape(row.model)} & {_escape(row.comparison)} & "
+            f"{_escape(row.dataset)} & {_escape(row.metric)} & {_escape(row.model)} & "
+            f"{_escape(row.comparison)} & "
             f"{int(row.n_subjects)} & "
             f"{_number(row.mean_difference)} & {_number(row.difference_ci95_low)} & "
             f"{_number(row.difference_ci95_high)} & "
@@ -218,19 +228,20 @@ def main() -> None:
             r"\caption{Batch-one model-forward latency on the recorded execution device.}",
             r"\label{tab:latency-results}",
             r"\centering\small",
-            r"\begin{tabular}{lrr}",
+            r"\begin{tabular}{llrr}",
             r"\toprule",
-            r"Model & Median (ms) & P95 (ms) \\",
+            r"Dataset & Model & Median (ms) & P95 (ms) \\",
             r"\midrule",
         ]
     )
-    batch_one = latency.loc[latency["batch_size"] == 1].set_index("model")
-    for model in MODEL_NAMES:
-        row = batch_one.loc[model]
-        lines.append(
-            f"{_escape(model)} & {_number(row['median_batch_ms'])} & "
-            f"{_number(row['p95_batch_ms'])} \\\\"
-        )
+    batch_one = latency.loc[latency["batch_size"] == 1].set_index(["dataset", "model"])
+    for dataset in ("MI-OpenBCI", "Souza2023"):
+        for model in MODEL_NAMES:
+            row = batch_one.loc[(dataset, model)]
+            lines.append(
+                f"{_escape(dataset)} & {_escape(model)} & "
+                f"{_number(row['median_batch_ms'])} & {_number(row['p95_batch_ms'])} \\\\"
+            )
     lines.extend([r"\bottomrule", r"\end{tabular}", r"\end{table}", ""])
     for stem, caption, label in (
         (
@@ -255,6 +266,16 @@ def main() -> None:
             "primary_confusion_matrices",
             "Primary MI-OpenBCI five-fold confusion matrices.",
             "fig:confusion",
+        ),
+        (
+            "souza_accuracy",
+            "Souza2023 participant-level accuracy by protocol.",
+            "fig:souza-accuracy",
+        ),
+        (
+            "souza_confusion_matrices",
+            "Souza2023 five-fold left-versus-right confusion matrices.",
+            "fig:souza-confusion",
         ),
     ):
         figure_path = args.results_dir / "figures" / f"{stem}.pdf"

@@ -16,8 +16,11 @@ from .config import (
     DATASET_SPECS,
     MI_CHANNELS,
     MI_SUBJECTS,
+    SOUZA_CHANNELS,
+    SOUZA_SUBJECTS,
     TARGET_SFREQ,
     resolve_mi_data_dir,
+    resolve_souza_data_dir,
 )
 from .types import SubjectRecording
 
@@ -129,6 +132,118 @@ def load_mi_openbci_subject(subject: str) -> SubjectRecording:
     return recording
 
 
+def _file_sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as source:
+        for chunk in iter(lambda: source.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def duplicate_file_groups(data_dir: Path, subjects: tuple[str, ...]) -> list[tuple[str, ...]]:
+    """Return groups of subject files with identical bytes."""
+    subjects_by_hash: dict[str, list[str]] = {}
+    for subject in subjects:
+        path = data_dir / f"{subject}.edf"
+        if path.exists():
+            subjects_by_hash.setdefault(_file_sha256(path), []).append(subject)
+    return [
+        tuple(group)
+        for group in subjects_by_hash.values()
+        if len(group) > 1
+    ]
+
+
+def _validate_souza_trial_counts(y: np.ndarray, sessions: np.ndarray, subject: str) -> None:
+    if len(y) != 160 or np.bincount(y, minlength=2).tolist() != [80, 80]:
+        raise ValueError(
+            f"Souza2023/{subject} must contain 160 trials balanced 80/80; "
+            f"got total={len(y)} classes={np.bincount(y, minlength=2).tolist()}"
+        )
+    expected_sessions = {f"run_{index}" for index in range(1, 5)}
+    if set(sessions) != expected_sessions:
+        raise ValueError(
+            f"Souza2023/{subject} must contain four runs; got {sorted(set(sessions))}"
+        )
+    for session in sorted(expected_sessions):
+        session_y = y[sessions == session]
+        if len(session_y) != 40 or np.bincount(session_y, minlength=2).tolist() != [20, 20]:
+            raise ValueError(
+                f"Souza2023/{subject}/{session} must contain 40 trials balanced 20/20"
+            )
+
+
+def load_souza_subject(subject: str) -> SubjectRecording:
+    """Load one Souza2023 EDF using execution markers and acquisition runs."""
+    if subject not in SOUZA_SUBJECTS:
+        raise ValueError(f"Unknown Souza2023 subject: {subject}")
+    path = resolve_souza_data_dir() / f"{subject}.edf"
+    if not path.exists():
+        raise FileNotFoundError(f"Missing Souza2023 subject file: {path}")
+    os.environ.setdefault("MNE_DONTWRITE_HOME", "true")
+    import mne
+
+    raw = mne.io.read_raw_edf(path, preload=False, verbose="ERROR")
+    info = raw.info.get("subject_info") or {}
+    declared_subject = str(info.get("his_id", "")).strip()
+    if declared_subject != subject:
+        raise ValueError(
+            f"Souza2023 file {path.name} declares subject {declared_subject or '<missing>'}; "
+            f"expected {subject}"
+        )
+    channel_index = {name: index for index, name in enumerate(raw.ch_names)}
+    missing = [name for name in SOUZA_CHANNELS if name not in channel_index]
+    if missing:
+        raise ValueError(f"Missing Souza2023 channels in {path.name}: {missing}")
+    picks = [channel_index[name] for name in SOUZA_CHANNELS]
+    source_sfreq = float(raw.info["sfreq"])
+    trial_samples = int(round(DATASET_SPECS["Souza2023"].trial_seconds * source_sfreq))
+    trials: list[np.ndarray] = []
+    labels: list[int] = []
+    session_labels: list[str] = []
+    run_index = 0
+    event_to_label = {"LeftExec": 0, "RightExec": 1}
+    for onset, description in zip(raw.annotations.onset, raw.annotations.description, strict=True):
+        event = str(description)
+        if event == "NewRun":
+            run_index += 1
+            continue
+        if event not in event_to_label:
+            continue
+        if run_index == 0:
+            raise ValueError(f"Souza2023/{subject} has an execution event before NewRun")
+        start = int(round(float(onset) * source_sfreq))
+        stop = start + trial_samples
+        if stop > raw.n_times:
+            raise ValueError(f"Souza2023/{subject} trial at {onset:.3f}s exceeds the EDF")
+        trials.append(raw.get_data(picks=picks, start=start, stop=stop))
+        labels.append(event_to_label[event])
+        session_labels.append(f"run_{run_index}")
+    x = np.asarray(trials, dtype=np.float32)
+    y = np.asarray(labels, dtype=np.int64)
+    sessions = np.asarray(session_labels, dtype=object)
+    _validate_souza_trial_counts(y, sessions, subject)
+    x = _resample_epochs(x, source_sfreq, TARGET_SFREQ)
+    target_samples = int(round(DATASET_SPECS["Souza2023"].trial_seconds * TARGET_SFREQ))
+    x = _crop_or_pad(x, target_samples)
+    recording = SubjectRecording(
+        dataset="Souza2023",
+        subject=subject,
+        x=x,
+        y=y,
+        sessions=sessions,
+        sfreq=TARGET_SFREQ,
+        ch_names=SOUZA_CHANNELS,
+        task=DATASET_SPECS["Souza2023"].task,
+        data_sha256=_recording_sha256(
+            x, y, sessions, sfreq=TARGET_SFREQ, ch_names=SOUZA_CHANNELS
+        ),
+        loader_bandpass_hz=None,
+    )
+    recording.validate()
+    return recording
+
+
 def _make_moabb_dataset(name: str):
     os.environ.setdefault("MNE_DONTWRITE_HOME", "true")
     from moabb.datasets import BNCI2014_001, AlexMI, Tavakolan2017, Zhou2020
@@ -149,13 +264,15 @@ def available_subjects(dataset_name: str) -> list[str]:
     """Return stable subject identifiers without downloading data."""
     if dataset_name == "MI-OpenBCI":
         return list(MI_SUBJECTS)
+    if dataset_name == "Souza2023":
+        return list(SOUZA_SUBJECTS)
     dataset = _make_moabb_dataset(dataset_name)
     return [str(subject) for subject in dataset.subject_list]
 
 
 def load_moabb_subject(dataset_name: str, subject: str) -> SubjectRecording:
     """Load one binary MOABB subject with session metadata and common filtering."""
-    if dataset_name not in DATASET_SPECS or dataset_name == "MI-OpenBCI":
+    if dataset_name not in DATASET_SPECS or dataset_name in {"MI-OpenBCI", "Souza2023"}:
         raise ValueError(f"Not a configured MOABB dataset: {dataset_name}")
     validate_dataset_dependencies(dataset_name)
     os.environ.setdefault("MNE_DONTWRITE_HOME", "true")
@@ -209,13 +326,15 @@ def load_subject(dataset_name: str, subject: str) -> SubjectRecording:
     """Dispatch to the local or MOABB dataset adapter."""
     if dataset_name == "MI-OpenBCI":
         return load_mi_openbci_subject(subject)
+    if dataset_name == "Souza2023":
+        return load_souza_subject(subject)
     return load_moabb_subject(dataset_name, subject)
 
 
 def download_moabb_dataset(dataset_name: str, subjects: list[str] | None = None) -> None:
     """Download selected MOABB subjects through the official dataset API."""
-    if dataset_name == "MI-OpenBCI":
-        raise ValueError("MI-OpenBCI is local; set CLEI_DATA_DIR instead")
+    if dataset_name in {"MI-OpenBCI", "Souza2023"}:
+        raise ValueError(f"{dataset_name} is local and is not downloaded through MOABB")
     dataset = _make_moabb_dataset(dataset_name)
     selected = dataset.subject_list
     if subjects:

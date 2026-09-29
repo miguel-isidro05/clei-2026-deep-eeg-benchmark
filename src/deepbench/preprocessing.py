@@ -190,7 +190,13 @@ def augment_training(x: np.ndarray, y: np.ndarray, condition: str) -> tuple[np.n
     if condition == "nonoverlap":
         starts = (0, x.shape[-1] - AUGMENT_WINDOW_SAMPLES)
     elif condition == "overlap":
-        starts = tuple(range(0, x.shape[-1] - AUGMENT_WINDOW_SAMPLES + 1, AUGMENT_OVERLAP_STEP))
+        max_start = x.shape[-1] - AUGMENT_WINDOW_SAMPLES
+        fixed_stride_starts = tuple(range(0, max_start + 1, AUGMENT_OVERLAP_STEP))
+        starts = (
+            fixed_stride_starts
+            if len(fixed_stride_starts) == 6
+            else tuple(np.linspace(0, max_start, 6, dtype=int))
+        )
     else:
         raise ValueError(f"Unsupported condition: {condition}")
     windows = [trial[:, start : start + AUGMENT_WINDOW_SAMPLES] for trial in x for start in starts]

@@ -17,7 +17,9 @@ from deepbench.runner import cell_path, run_job
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
     parser.add_argument(
-        "--phase", choices=("primary", "external", "ica-sensitivity", "all"), default="all"
+        "--phase",
+        choices=("peterson", "souza", "primary", "external", "ica-sensitivity", "all"),
+        default="all",
     )
     parser.add_argument("--device", default=get_device())
     parser.add_argument("--epochs", type=int, default=PAPER_EPOCHS)
@@ -39,7 +41,7 @@ def main() -> None:
         )
     if args.num_shards < 1 or not 0 <= args.shard_index < args.num_shards:
         raise SystemExit("Require num_shards >= 1 and 0 <= shard_index < num_shards")
-    if args.num_shards > 1 and args.phase in {"primary", "all"}:
+    if args.num_shards > 1 and args.phase in {"peterson", "souza", "primary", "all"}:
         raise SystemExit(
             "Subject sharding is disabled for the primary phase because LOSO requires the full "
             "training cohort. Shard only external or ica-sensitivity."

@@ -20,10 +20,20 @@ echo "git_revision=$(git rev-parse HEAD)"
 python -u scripts/preflight.py --require-cuda --min-cuda-devices 2 \
   --quality-output-dir "${RESULTS_ROOT}/quality"
 python -u scripts/audit_signal_quality.py \
-  --datasets MI-OpenBCI Zhou2020 Tavakolan2017 --output-dir "${RESULTS_ROOT}/quality"
+  --datasets MI-OpenBCI Souza2023 Zhou2020 Tavakolan2017 \
+  --output-dir "${RESULTS_ROOT}/quality"
 python -u scripts/run_paper.py --phase all --plan-only --output-dir "${RESULTS_ROOT}"
 
-python -u scripts/run_paper.py --phase primary --device cuda:0 --output-dir "${RESULTS_ROOT}"
+python -u scripts/run_paper.py --phase peterson --device cuda:0 --output-dir "${RESULTS_ROOT}" &
+peterson_gpu0=$!
+python -u scripts/run_paper.py --phase souza --device cuda:1 --output-dir "${RESULTS_ROOT}" &
+souza_gpu1=$!
+primary_failed=0
+wait "${peterson_gpu0}" || primary_failed=1
+wait "${souza_gpu1}" || primary_failed=1
+if [[ "${primary_failed}" -ne 0 ]]; then
+  exit 1
+fi
 
 python -u scripts/run_paper.py --phase external --num-shards 2 --shard-index 0 \
   --device cuda:0 --output-dir "${RESULTS_ROOT}" &

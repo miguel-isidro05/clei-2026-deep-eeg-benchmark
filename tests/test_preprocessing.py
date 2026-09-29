@@ -23,6 +23,19 @@ def test_training_augmentation_preserves_trial_labels() -> None:
     assert prepare_test_input(x, "overlap").shape == (3, 2, 256)
 
 
+def test_souza_overlap_keeps_six_compute_matched_windows() -> None:
+    x = np.arange(2 * 16 * 384, dtype=np.float32).reshape(2, 16, 384)
+    y = np.array([0, 1])
+
+    overlap_x, overlap_y = augment_training(x, y, "overlap")
+    center_x6, center_y6 = augment_training(x, y, "center_x6")
+
+    assert overlap_x.shape == (12, 16, 256)
+    assert overlap_y.tolist() == [0] * 6 + [1] * 6
+    assert center_x6.shape == overlap_x.shape
+    assert center_y6.tolist() == overlap_y.tolist()
+
+
 def test_normalization_is_fitted_only_on_training_partition() -> None:
     rng = np.random.default_rng(4)
     x_train = rng.normal(0, 1, (12, 3, 512)).astype(np.float32)

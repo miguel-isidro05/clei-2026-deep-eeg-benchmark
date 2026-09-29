@@ -33,58 +33,61 @@ def test_all_publication_figures_are_generated_from_validated_tables(tmp_path) -
     cells.mkdir()
     metric_rows = []
     descriptive_rows = []
-    for model_index, model in enumerate(MODEL_NAMES):
-        for subject in range(5):
-            for seed in range(5):
-                for metric in ("accuracy", "kappa"):
-                    base = 0.6 if metric == "accuracy" else 0.2
-                    for policy in ("none", "kurtosis"):
-                        metric_rows.append(
-                            {
-                                "dataset": "MI-OpenBCI",
-                                "task": "binary",
-                                "protocol": "within_split",
-                                "condition": "full",
-                                "ica_policy": policy,
-                                "model": model,
-                                "subject": str(subject),
-                                "seed": seed,
-                                "metric": metric,
-                                "value": base + model_index * 0.01 + (policy == "kurtosis") * 0.001,
-                            }
-                        )
-        for metric in ("accuracy", "kappa"):
-            descriptive_rows.append(
-                {
-                    "dataset": "MI-OpenBCI",
-                    "task": "binary",
-                    "protocol": "within_split",
-                    "condition": "full",
-                    "ica_policy": "none",
-                    "metric": metric,
-                    "model": model,
-                    "mean": 0.65,
-                    "sd_between_subjects": 0.05,
-                    "ci95_low": 0.60,
-                    "ci95_high": 0.70,
-                    "mean_within_subject_seed_sd": 0.01,
-                }
+    for dataset in ("MI-OpenBCI", "Souza2023"):
+        for model_index, model in enumerate(MODEL_NAMES):
+            for subject in range(5):
+                for seed in range(5):
+                    for metric in ("accuracy", "kappa"):
+                        base = 0.6 if metric == "accuracy" else 0.2
+                        for policy in ("none", "kurtosis"):
+                            metric_rows.append(
+                                {
+                                    "dataset": dataset,
+                                    "task": "binary",
+                                    "protocol": "within_split",
+                                    "condition": "full",
+                                    "ica_policy": policy,
+                                    "model": model,
+                                    "subject": str(subject),
+                                    "seed": seed,
+                                    "metric": metric,
+                                    "value": base
+                                    + model_index * 0.01
+                                    + (policy == "kurtosis") * 0.001,
+                                }
+                            )
+            for metric in ("accuracy", "kappa"):
+                descriptive_rows.append(
+                    {
+                        "dataset": dataset,
+                        "task": "binary",
+                        "protocol": "within_split",
+                        "condition": "full",
+                        "ica_policy": "none",
+                        "metric": metric,
+                        "model": model,
+                        "mean": 0.65,
+                        "sd_between_subjects": 0.05,
+                        "ci95_low": 0.60,
+                        "ci95_high": 0.70,
+                        "mean_within_subject_seed_sd": 0.01,
+                    }
+                )
+            destination = cell_path(
+                tmp_path, dataset, "within_session", "full", model, 0, "0", "none"
             )
-        destination = cell_path(
-            tmp_path, "MI-OpenBCI", "within_session", "full", model, 0, "0", "none"
-        )
-        destination.write_text(
-            json.dumps(
-                {
-                    "model": model,
-                    "subject": "0",
-                    "seed": 0,
-                    "y_true": [0, 0, 1, 1],
-                    "y_pred": [0, 1, 1, 1],
-                }
-            ),
-            encoding="utf-8",
-        )
+            destination.write_text(
+                json.dumps(
+                    {
+                        "model": model,
+                        "subject": "0",
+                        "seed": 0,
+                        "y_true": [0, 0, 1, 1],
+                        "y_pred": [0, 1, 1, 1],
+                    }
+                ),
+                encoding="utf-8",
+            )
     pd.DataFrame(metric_rows).to_csv(statistics / "all_seed_metrics.csv", index=False)
     pd.DataFrame(descriptive_rows).to_csv(
         statistics / "descriptive_subject_seed_variability.csv", index=False
@@ -92,7 +95,7 @@ def test_all_publication_figures_are_generated_from_validated_tables(tmp_path) -
     pd.DataFrame(
         [
             {
-                "dataset": "MI-OpenBCI",
+                "dataset": dataset,
                 "metric": "accuracy",
                 "model": model,
                 "comparison": comparison,
@@ -100,6 +103,7 @@ def test_all_publication_figures_are_generated_from_validated_tables(tmp_path) -
                 "difference_ci95_low": -0.01,
                 "difference_ci95_high": 0.03,
             }
+            for dataset in ("MI-OpenBCI", "Souza2023")
             for model in MODEL_NAMES
             for comparison in ("nonoverlap-center_x2", "overlap-center_x6")
         ]
@@ -107,17 +111,20 @@ def test_all_publication_figures_are_generated_from_validated_tables(tmp_path) -
     pd.DataFrame(
         [
             {
+                "dataset": dataset,
                 "model": model,
                 "batch_size": 1,
                 "median_batch_ms": 1.0,
                 "p95_batch_ms": 1.5,
             }
+            for dataset in ("MI-OpenBCI", "Souza2023")
             for model in MODEL_NAMES
         ]
     ).to_csv(latency / "latency.csv", index=False)
     generate_all_figures(tmp_path)
     expected_stems = {
         "primary_accuracy",
+        "souza_accuracy",
         "performance_overview_accuracy",
         "performance_overview_kappa",
         "augmentation_effects",
@@ -125,6 +132,7 @@ def test_all_publication_figures_are_generated_from_validated_tables(tmp_path) -
         "ica_sensitivity",
         "model_inference_latency",
         "primary_confusion_matrices",
+        "souza_confusion_matrices",
     }
     assert {path.stem for path in (tmp_path / "figures").glob("*.png")} == expected_stems
     assert {path.stem for path in (tmp_path / "figures").glob("*.pdf")} == expected_stems

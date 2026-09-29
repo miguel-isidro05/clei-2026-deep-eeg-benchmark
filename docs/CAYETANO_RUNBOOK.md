@@ -2,13 +2,15 @@
 
 ## 1. Preparacion
 
-1. Instalar Git, Miniconda y el driver NVIDIA. Confirmar `nvidia-smi`.
-2. Clonar el repositorio y crear el entorno con `conda env create -f environment.yml`.
-3. Activar `deep-eeg-clei`.
-4. Definir `CLEI_DATA_DIR` y `MNE_DATA` como se muestra en el README.
-5. Ejecutar `python scripts/preflight.py --require-cuda --min-cuda-devices 2`. No continuar si no termina en `preflight=OK`.
-6. Descargar primero los datos con
-   `python scripts/download_moabb.py --datasets Zhou2020 Tavakolan2017`.
+1. Instalar Git, Miniconda, `wget` y el driver NVIDIA. Confirmar `nvidia-smi`.
+2. Clonar el repositorio.
+3. Ejecutar `SOUZA_001_URL='URL_CORREGIDA' CAYETANO=1 bash setup.sh`.
+4. Activar `deep-eeg-clei`.
+5. No continuar si el instalador no termina en `setup=OK` y `preflight=OK`.
+
+El adjunto público 42 es una copia exacta del sujeto `004`; no es un sujeto `001` válido. El
+instalador lo deja en cuarentena y exige una URL corregida para una corrida confirmatoria. No
+renombre ni duplique el archivo 004.
 
 `Tavakolan2017` usa el lector BCI2000 que MOABB importa de forma opcional. El proyecto lo fija a
 un commit exacto de su repositorio oficial y `preflight.py` comprueba su presencia antes de
@@ -24,6 +26,16 @@ python scripts/run_experiments.py --dataset MI-OpenBCI --subjects S02 \
   --models EEGNet FBCNet ShallowConvNet EEGConformer EEGInceptionMI \
   --protocols within_split --conditions full --seeds 0 --epochs 3 \
   --ica-policy none --device cuda --output-dir results_pilot
+```
+
+Ejecute también el piloto de Souza2023, que verifica los cinco modelos en la tarea izquierda frente
+a derecha:
+
+```bash
+python scripts/run_experiments.py --dataset Souza2023 --subjects 002 \
+  --models EEGNet FBCNet ShallowConvNet EEGConformer EEGInceptionMI \
+  --protocols within_split cross_session --conditions full --seeds 0 --epochs 3 \
+  --ica-policy none --device cuda --output-dir results_souza_pilot
 ```
 
 Revise `nvidia-smi`, el tiempo de cada epoch en `training_history` y el espacio en disco. Multiplique
@@ -42,7 +54,7 @@ python scripts/run_experiments.py --dataset Tavakolan2017 --subjects 1 \
 La forma recomendada en la RTX A6000 doble es el script completo, porque guarda consola y resumen:
 
 ```bash
-bash scripts/run_cayetano.sh
+bash run_cayetano.sh
 ```
 
 El script escribe `results/logs/paper-*.log`, `results/EXPERIMENT_LOG.md`, tablas, latencia y
@@ -51,7 +63,8 @@ manualmente, use cada fase por separado dentro de `tmux`, `screen` o un job pers
 
 ```bash
 python scripts/run_paper.py --phase all --plan-only
-python scripts/run_paper.py --phase primary --device cuda
+python scripts/run_paper.py --phase peterson --device cuda:0
+python scripts/run_paper.py --phase souza --device cuda:1
 python scripts/run_paper.py --phase external --device cuda
 python scripts/run_paper.py --phase ica-sensitivity --device cuda
 ```
@@ -82,6 +95,6 @@ manifiestos de fase. Conserve juntos
 `results/cells`, `results/manifests`, `results/statistics`, `results/quality`, `results/latency`,
 `results/figures`, `results/logs` y `results/EXPERIMENT_LOG.md`.
 
-Si la sesión se interrumpe, vuelva a ejecutar `bash scripts/run_cayetano.sh`. Las celdas y folds
+Si la sesión se interrumpe, vuelva a ejecutar `bash run_cayetano.sh`. Las celdas y folds
 compatibles se omiten. No mezcle una carpeta `results` creada con otro commit o perfil: el
 fingerprint y el auditor la rechazarán.

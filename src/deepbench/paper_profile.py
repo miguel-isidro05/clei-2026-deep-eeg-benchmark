@@ -20,10 +20,10 @@ class PaperBlock(TypedDict):
 
 def paper_blocks(phase: str) -> list[PaperBlock]:
     """Return the predeclared blocks without inspecting any result."""
-    if phase not in {"primary", "external", "ica-sensitivity", "all"}:
+    if phase not in {"peterson", "souza", "primary", "external", "ica-sensitivity", "all"}:
         raise ValueError(f"Unsupported paper phase: {phase}")
     blocks: list[PaperBlock] = []
-    if phase in {"primary", "all"}:
+    if phase in {"peterson", "primary", "all"}:
         blocks.extend(
             [
                 {
@@ -34,6 +34,23 @@ def paper_blocks(phase: str) -> list[PaperBlock]:
                 },
                 {
                     "dataset": "MI-OpenBCI",
+                    "protocols": ["within_split"],
+                    "conditions": ["center_x2", "nonoverlap", "center_x6", "overlap"],
+                    "ica_policy": "none",
+                },
+            ]
+        )
+    if phase in {"souza", "primary", "all"}:
+        blocks.extend(
+            [
+                {
+                    "dataset": "Souza2023",
+                    "protocols": ["within_split", "within_session", "cross_session", "loso"],
+                    "conditions": ["full"],
+                    "ica_policy": "none",
+                },
+                {
+                    "dataset": "Souza2023",
                     "protocols": ["within_split"],
                     "conditions": ["center_x2", "nonoverlap", "center_x6", "overlap"],
                     "ica_policy": "none",
@@ -51,13 +68,14 @@ def paper_blocks(phase: str) -> list[PaperBlock]:
             for dataset in ("Zhou2020", "Tavakolan2017")
         )
     if phase in {"ica-sensitivity", "all"}:
-        blocks.append(
+        blocks.extend(
             {
-                "dataset": "MI-OpenBCI",
+                "dataset": dataset,
                 "protocols": ["within_split"],
                 "conditions": ["full"],
                 "ica_policy": "kurtosis",
             }
+            for dataset in ("MI-OpenBCI", "Souza2023")
         )
     return blocks
 

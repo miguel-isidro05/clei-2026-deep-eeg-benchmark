@@ -27,19 +27,24 @@ def _save_figure(figure: plt.Figure, output_dir: Path, stem: str) -> None:
     plt.close(figure)
 
 
-def plot_primary_accuracy(statistics_dir: Path, output_dir: Path) -> None:
+def plot_dataset_accuracy(
+    statistics_dir: Path,
+    output_dir: Path,
+    *,
+    dataset: str,
+    protocol_order: tuple[str, ...],
+    stem: str,
+) -> None:
     table = pd.read_csv(statistics_dir / "descriptive_subject_seed_variability.csv")
     selected = table.loc[
-        (table["dataset"] == "MI-OpenBCI")
+        (table["dataset"] == dataset)
         & (table["condition"] == "full")
         & (table["ica_policy"] == "none")
         & (table["metric"] == "accuracy")
     ].copy()
-    protocols = [
-        value
-        for value in ("within_split", "within_session", "loso")
-        if value in set(selected["protocol"])
-    ]
+    protocols = [value for value in protocol_order if value in set(selected["protocol"])]
+    if not protocols:
+        raise ValueError(f"No accuracy results found for {dataset}")
     figure, axes = plt.subplots(1, len(protocols), figsize=(4.5 * len(protocols), 4), sharey=True)
     axes = np.atleast_1d(axes)
     for axis, protocol in zip(axes, protocols, strict=True):
@@ -61,15 +66,37 @@ def plot_primary_accuracy(statistics_dir: Path, output_dir: Path) -> None:
         axis.set_ylim(0, 1)
         axis.set_ylabel("Accuracy")
         axis.grid(axis="y", alpha=0.25)
-    figure.suptitle("MI-OpenBCI: subject-level mean accuracy and 95% t confidence interval")
-    _save_figure(figure, output_dir, "primary_accuracy")
+    figure.suptitle(f"{dataset}: subject-level mean accuracy and 95% t confidence interval")
+    _save_figure(figure, output_dir, stem)
+
+
+def plot_primary_accuracy(statistics_dir: Path, output_dir: Path) -> None:
+    plot_dataset_accuracy(
+        statistics_dir,
+        output_dir,
+        dataset="MI-OpenBCI",
+        protocol_order=("within_split", "within_session", "loso"),
+        stem="primary_accuracy",
+    )
+    plot_dataset_accuracy(
+        statistics_dir,
+        output_dir,
+        dataset="Souza2023",
+        protocol_order=("within_split", "within_session", "cross_session", "loso"),
+        stem="souza_accuracy",
+    )
 
 
 def plot_augmentation_effects(statistics_dir: Path, output_dir: Path) -> None:
     table = pd.read_csv(statistics_dir / "augmentation_wilcoxon_holm.csv")
-    selected = table.loc[(table["metric"] == "accuracy") & (table["dataset"] == "MI-OpenBCI")]
+    selected = table.loc[
+        (table["metric"] == "accuracy")
+        & table["dataset"].isin(["MI-OpenBCI", "Souza2023"])
+    ]
     figure, axis = plt.subplots(figsize=(9, 5))
-    labels = [f"{row.model}\n{row.comparison}" for row in selected.itertuples()]
+    labels = [
+        f"{row.dataset}\n{row.model}\n{row.comparison}" for row in selected.itertuples()
+    ]
     means = selected["mean_difference"].to_numpy(float)
     lower = means - selected["difference_ci95_low"].to_numpy(float)
     upper = selected["difference_ci95_high"].to_numpy(float) - means
@@ -168,56 +195,80 @@ def plot_seed_variability(statistics_dir: Path, output_dir: Path) -> None:
 def plot_ica_sensitivity(statistics_dir: Path, output_dir: Path) -> None:
     table = pd.read_csv(statistics_dir / "all_seed_metrics.csv")
     selected = table.loc[
-        (table["dataset"] == "MI-OpenBCI")
+        table["dataset"].isin(["MI-OpenBCI", "Souza2023"])
         & (table["protocol"] == "within_split")
         & (table["condition"] == "full")
     ]
-    subject_means = selected.groupby(["metric", "model", "subject", "ica_policy"], observed=True)[
-        "value"
-    ].mean()
-    figure, axes = plt.subplots(1, 2, figsize=(11, 4), sharey=False)
-    for axis, metric in zip(axes, ("accuracy", "kappa"), strict=True):
-        metric_values = subject_means.loc[metric].unstack("ica_policy")
-        for model_index, model in enumerate(MODEL_NAMES):
-            differences = (
-                metric_values.loc[model, "kurtosis"] - metric_values.loc[model, "none"]
-            ).to_numpy(float)
-            jitter = np.linspace(-0.08, 0.08, len(differences))
-            axis.scatter(model_index + jitter, differences, alpha=0.55, s=18)
-            mean, low, high = mean_ci(differences)
-            axis.errorbar(
-                model_index,
-                mean,
-                yerr=[[mean - low], [high - mean]],
-                fmt="o",
-                color="black",
-                capsize=3,
-            )
-        axis.axhline(0, color="black", linewidth=1)
-        axis.set_title(metric.capitalize())
-        axis.set_xticks(range(len(MODEL_NAMES)), MODEL_NAMES, rotation=35, ha="right")
-        axis.set_ylabel("Kurtosis ICA minus no ICA")
-        axis.grid(axis="y", alpha=0.25)
+    subject_means = selected.groupby(
+        ["dataset", "metric", "model", "subject", "ica_policy"], observed=True
+    )["value"].mean()
+    datasets = [
+        dataset
+        for dataset in ("MI-OpenBCI", "Souza2023")
+        if dataset in set(selected["dataset"])
+    ]
+    figure, axes = plt.subplots(len(datasets), 2, figsize=(11, 4 * len(datasets)), squeeze=False)
+    for row_index, dataset in enumerate(datasets):
+        for column_index, metric in enumerate(("accuracy", "kappa")):
+            axis = axes[row_index, column_index]
+            metric_values = subject_means.loc[(dataset, metric)].unstack("ica_policy")
+            for model_index, model in enumerate(MODEL_NAMES):
+                differences = (
+                    metric_values.loc[model, "kurtosis"] - metric_values.loc[model, "none"]
+                ).to_numpy(float)
+                jitter = np.linspace(-0.08, 0.08, len(differences))
+                axis.scatter(model_index + jitter, differences, alpha=0.55, s=18)
+                mean, low, high = mean_ci(differences)
+                axis.errorbar(
+                    model_index,
+                    mean,
+                    yerr=[[mean - low], [high - mean]],
+                    fmt="o",
+                    color="black",
+                    capsize=3,
+                )
+            axis.axhline(0, color="black", linewidth=1)
+            axis.set_title(f"{dataset}: {metric.capitalize()}")
+            axis.set_xticks(range(len(MODEL_NAMES)), MODEL_NAMES, rotation=35, ha="right")
+            axis.set_ylabel("Kurtosis ICA minus no ICA")
+            axis.grid(axis="y", alpha=0.25)
     _save_figure(figure, output_dir, "ica_sensitivity")
 
 
 def plot_latency(results_dir: Path, output_dir: Path) -> None:
     table = pd.read_csv(results_dir / "latency" / "latency.csv")
-    batch_one = table.loc[table["batch_size"] == 1].set_index("model").reindex(MODEL_NAMES)
-    figure, axis = plt.subplots(figsize=(7, 4))
-    axis.bar(MODEL_NAMES, batch_one["median_batch_ms"], color="#70AD47")
-    axis.scatter(MODEL_NAMES, batch_one["p95_batch_ms"], color="black", label="p95", zorder=3)
-    axis.set_ylabel("Forward-pass latency (ms)")
-    axis.tick_params(axis="x", rotation=35)
-    axis.legend()
-    axis.grid(axis="y", alpha=0.25)
+    datasets = list(table["dataset"].drop_duplicates())
+    figure, axes = plt.subplots(1, len(datasets), figsize=(7 * len(datasets), 4), squeeze=False)
+    for axis, dataset in zip(axes.ravel(), datasets, strict=True):
+        batch_one = (
+            table.loc[(table["batch_size"] == 1) & (table["dataset"] == dataset)]
+            .set_index("model")
+            .reindex(MODEL_NAMES)
+        )
+        axis.bar(MODEL_NAMES, batch_one["median_batch_ms"], color="#70AD47")
+        axis.scatter(
+            MODEL_NAMES, batch_one["p95_batch_ms"], color="black", label="p95", zorder=3
+        )
+        axis.set_title(dataset)
+        axis.set_ylabel("Forward-pass latency (ms)")
+        axis.tick_params(axis="x", rotation=35)
+        axis.legend()
+        axis.grid(axis="y", alpha=0.25)
     _save_figure(figure, output_dir, "model_inference_latency")
 
 
-def plot_primary_confusion_matrices(cells_dir: Path, output_dir: Path) -> None:
+def plot_dataset_confusion_matrices(
+    cells_dir: Path,
+    output_dir: Path,
+    *,
+    dataset: str,
+    class_names: tuple[str, str],
+    stem: str,
+) -> None:
     by_model: dict[str, list[np.ndarray]] = {model: [] for model in MODEL_NAMES}
     by_subject_seed: dict[tuple[str, str, int], list[np.ndarray]] = {}
-    for path in sorted(cells_dir.glob("MI-OpenBCI__within_session__full__ica-none__*.json")):
+    pattern = f"{dataset}__within_session__full__ica-none__*.json"
+    for path in sorted(cells_dir.glob(pattern)):
         payload = json.loads(path.read_text(encoding="utf-8"))
         key = (str(payload["model"]), str(payload["subject"]), int(payload["seed"]))
         matrix = confusion_matrix(
@@ -232,11 +283,13 @@ def plot_primary_confusion_matrices(cells_dir: Path, output_dir: Path) -> None:
     figure, axes = plt.subplots(1, len(MODEL_NAMES), figsize=(15, 3), sharex=True, sharey=True)
     image = None
     for axis, model in zip(axes, MODEL_NAMES, strict=True):
+        if not by_model[model]:
+            raise ValueError(f"No within-session confusion matrices found for {dataset}/{model}")
         matrix = np.mean(by_model[model], axis=0)
         image = axis.imshow(matrix, vmin=0, vmax=1, cmap="Blues")
         axis.set_title(model)
-        axis.set_xticks([0, 1], ["Rest", "MI"])
-        axis.set_yticks([0, 1], ["Rest", "MI"])
+        axis.set_xticks([0, 1], class_names)
+        axis.set_yticks([0, 1], class_names)
         axis.set_xlabel("Predicted")
         for row in range(2):
             for column in range(2):
@@ -244,7 +297,25 @@ def plot_primary_confusion_matrices(cells_dir: Path, output_dir: Path) -> None:
     axes[0].set_ylabel("True")
     if image is not None:
         figure.colorbar(image, ax=axes.tolist(), fraction=0.02, pad=0.02)
-    _save_figure(figure, output_dir, "primary_confusion_matrices")
+    figure.suptitle(dataset)
+    _save_figure(figure, output_dir, stem)
+
+
+def plot_primary_confusion_matrices(cells_dir: Path, output_dir: Path) -> None:
+    plot_dataset_confusion_matrices(
+        cells_dir,
+        output_dir,
+        dataset="MI-OpenBCI",
+        class_names=("Rest", "MI"),
+        stem="primary_confusion_matrices",
+    )
+    plot_dataset_confusion_matrices(
+        cells_dir,
+        output_dir,
+        dataset="Souza2023",
+        class_names=("Left", "Right"),
+        stem="souza_confusion_matrices",
+    )
 
 
 def generate_all_figures(results_dir: Path) -> None:
