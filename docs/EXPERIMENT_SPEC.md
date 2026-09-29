@@ -26,6 +26,11 @@ hardware.
 Las cinco implementaciones proceden de Braindecode 1.5.2. CSP, DeepConvNet y modelos caseros no
 forman parte del benchmark nuevo.
 
+Esta sustitucion del conjunto historico CSP/EEGNet/CNN2D/ShallowConvNet/ATCNet es una decision
+explicita del autor para responder la revision con decoders deep modernos y evitar que el nuevo
+paper mezcle clasificadores clasicos con redes neuronales. El handoff MICCAI se conserva como
+referencia metodologica, pero no define el conjunto final de modelos de esta revision.
+
 ## Preprocesamiento comun
 
 - Banda inicial 1 a 40 Hz para ajustar ICA.
@@ -39,6 +44,8 @@ forman parte del benchmark nuevo.
   segundos (384 muestras) para Tavakolan2017. Todos los modelos reciben exactamente el mismo
   soporte temporal dentro de cada dataset.
 - Z-score por canal calculado solo en training.
+- MOABB aplica la banda inicial 1-40 Hz durante la carga. El preprocesamiento registra ese origen
+  y no repite el mismo filtro; MI-OpenBCI recibe la banda inicial dentro de cada fold.
 
 Cada fold de sensibilidad guarda convergencia, iteraciones, seed, kurtosis, candidatos y
 componentes excluidos. No existe seleccion manual. Esta condicion no se describe como
@@ -61,6 +68,16 @@ separado con cuatro condiciones aplicadas por igual a todos los modelos:
 - `overlap`: seis ventanas solapadas de dos segundos durante training.
 
 La evaluacion siempre permanece a nivel de trial.
+Cada pareja emparejada contiene el mismo número de ejemplos, batches por época y actualizaciones
+del optimizador. El análisis se detiene si esos conteos difieren.
+
+## Calidad de señal
+
+Antes del entrenamiento se registran proporción de valores finitos, varianza, desviación estándar,
+RMS, amplitud pico a pico, canales constantes o casi planos, alertas de amplitud relativa y
+conteos por clase y sesión. Las alertas no excluyen datos automáticamente. En los datasets de
+MOABB no se estima ruido de línea a partir de épocas ya filtradas a 1-40 Hz; se marca como no
+disponible.
 
 ## Semillas y unidad estadistica
 

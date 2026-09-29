@@ -4,13 +4,14 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 from pathlib import Path
 
 from deepbench.config import PAPER_SEEDS, RESULTS_DIR
 from deepbench.io import write_json_atomic
 from deepbench.paper_audit import audit_expected_cells, result_cells_sha256
-from deepbench.statistics import write_statistics
+from deepbench.statistics import statistics_code_sha256, write_statistics
 
 
 def main() -> None:
@@ -32,15 +33,14 @@ def main() -> None:
         allow_incomplete=args.allow_incomplete,
         force_exploratory=not confirmatory,
     )
-    expectation_manifests = sorted(
-        (args.results_dir / "manifests").glob("paper-expected-*.json")
-    )
+    expectation_manifests = sorted((args.results_dir / "manifests").glob("paper-expected-*.json"))
     profile_hashes = sorted(
         {
             str(json.loads(path.read_text(encoding="utf-8")).get("profile_sha256"))
             for path in expectation_manifests
         }
     )
+    statistics_files = sorted((args.results_dir / "statistics").glob("*.csv"))
     write_json_atomic(
         args.results_dir / "statistics" / "statistics_manifest.json",
         {
@@ -48,6 +48,11 @@ def main() -> None:
             "profile_sha256_values": profile_hashes,
             "confirmatory": confirmatory,
             "expected_cell_count": int(len(audit)),
+            "statistics_code_sha256": statistics_code_sha256(),
+            "statistics_files": {
+                path.name: hashlib.sha256(path.read_bytes()).hexdigest()
+                for path in statistics_files
+            },
         },
     )
     print(f"Statistics written to {args.results_dir / 'statistics'}")

@@ -17,7 +17,8 @@ trap 'finish_report failed' ERR
 
 echo "run_started_utc=${RUN_STAMP}"
 echo "git_revision=$(git rev-parse HEAD)"
-python -u scripts/preflight.py --require-cuda --quality-output-dir "${RESULTS_ROOT}/quality"
+python -u scripts/preflight.py --require-cuda --min-cuda-devices 2 \
+  --quality-output-dir "${RESULTS_ROOT}/quality"
 python -u scripts/audit_signal_quality.py \
   --datasets MI-OpenBCI Zhou2020 Tavakolan2017 --output-dir "${RESULTS_ROOT}/quality"
 python -u scripts/run_paper.py --phase all --plan-only --output-dir "${RESULTS_ROOT}"
@@ -53,6 +54,7 @@ fi
 python -u scripts/profile_latency.py --device cuda:0 --output-dir "${RESULTS_ROOT}/latency"
 python -u scripts/run_statistics.py --results-dir "${RESULTS_ROOT}"
 python -u scripts/generate_figures.py --results-dir "${RESULTS_ROOT}"
+python -u scripts/generate_manuscript_results.py --results-dir "${RESULTS_ROOT}"
 finish_report completed
 trap - ERR
 echo "run_completed_utc=$(date -u +%Y%m%dT%H%M%SZ)"

@@ -1,39 +1,33 @@
-# Resumen de auditoría científica
-
-> Este documento conserva el dictamen sobre la revisión `e39fd1e`. Los bloqueantes de diseño se
-> corrigieron después en `RESOLUTION_REPORT.md`. Los resultados completos siguen pendientes.
+# Resumen de auditoria cientifica
 
 ## Dictamen
 
-El pipeline es ejecutable y cubre correctamente el núcleo solicitado: cinco decoders deep,
-cinco semillas, particiones fijas, Wilcoxon pareado por sujeto, corrección de Holm, intervalos
-de confianza sin bootstrap, evaluación cross-session, ICA train-only como sensibilidad y
-latencia de inferencia controlada.
+El pipeline del paper quedo listo para la corrida completa en la PC de Cayetano. Cubre los cinco
+decoders deep solicitados, cinco semillas, `within_split`, `within_session` de cinco folds,
+LOSO para MI-OpenBCI, leave-one-session-out para Zhou2020 y Tavakolan2017, Wilcoxon pareado con
+Holm, intervalos de confianza, efecto rank-biserial, control de calidad de senal, perfilado de
+latencia, figuras y bloque LaTeX generados desde artefactos validados.
 
-Todavía no debe usarse para cerrar todas las respuestas de los revisores ni para producir la
-versión final del paper. Antes de gastar el presupuesto completo de GPU deben resolverse tres
-decisiones que cambian el diseño o su trazabilidad:
+Los bloqueantes previos quedan resueltos en codigo y documentacion. BNCI2014_001 no forma parte
+del perfil confirmatorio porque no contiene la clase `rest`; reducirlo a left-versus-right
+responderia otra pregunta. La decision congelada es mantener MI-OpenBCI como dataset low-cost
+primario y usar Zhou2020/Tavakolan2017 como validacion externa task-matched.
 
-1. El perfil del paper no ejecuta el protocolo `within_session` de cinco folds que los revisores
-   reconocieron como una fortaleza y que el manuscrito aún reporta.
-2. La procedencia de las recetas e hiperparámetros no está congelada en una tabla auditable, y la
-   compatibilidad de celdas no incorpora versiones de dependencias ni identidad de los datos.
-3. El tracker canónico pide BNCI2014_001 de cuatro clases, mientras el código implementa una tarea
-   binaria left-hand versus right-hand. Esta desviación puede ser válida, pero debe decidirse y
-   preespecificarse antes de ejecutar.
+Lo que sigue pendiente no es de implementacion sino de ejecucion: aun no existen resultados
+completos de las 3.600 celdas. Por eso no debe declararse ganador, mejora significativa ni ranking
+final hasta que `scripts/run_cayetano.sh` termine y `scripts/run_statistics.py`,
+`scripts/generate_figures.py` y `scripts/generate_manuscript_results.py` pasen el gate
+confirmatorio.
 
-Los resultados y las afirmaciones de superioridad permanecen abiertos hasta completar la matriz
-multisemilla. El manuscrito activo no es compatible con el benchmark nuevo: todavía contiene CSP,
-DeepConvNet, una seed, Friedman, bootstrap y resultados históricos.
+## Evidencia de ejecucion local
 
-## Evidencia de ejecución
+- `python scripts/run_paper.py --phase all --plan-only` produjo `planned_cells=3600`.
+- El perfil confirmatorio rechaza cualquier numero de epocas distinto de 300.
+- La inferencia confirmatoria se bloquea si faltan celdas, seeds, manifiestos o si los resultados
+  no coinciden con el fingerprint esperado.
+- Las ejecuciones incompletas solo pueden generar salidas descriptivas marcadas como exploratorias.
+- `scripts/run_cayetano.sh` deja consola completa en `results/logs/paper-*.log` y resumen en
+  `results/EXPERIMENT_LOG.md`.
 
-- 26 pruebas aprobadas.
-- `ruff check .` aprobado.
-- Preflight aprobado para EEGNet, FBCNet, ShallowConvNet, EEGConformer y EEGInceptionMI.
-- Smoke real MI-OpenBCI/S02/EEGNet, una época, aprobado.
-- El plan completo genera 2,950 celdas esperadas.
-- El análisis confirmatorio se bloquea cuando faltan celdas.
-- Una ejecución incompleta solo genera descriptivos marcados como exploratorios.
-
-La matriz completa está en `SCIENTIFIC_AUDIT.md`.
+La matriz de decisiones y trazabilidad esta en `SCIENTIFIC_AUDIT.md`, `RESOLUTION_REPORT.md`,
+`COMPARABILITY_REPORT.md`, `SCIENTIFIC_CHANGELOG.md` y `PATCHES.md`.

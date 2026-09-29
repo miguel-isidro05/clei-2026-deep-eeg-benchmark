@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 from pathlib import Path
 
@@ -12,6 +13,11 @@ from sklearn.metrics import confusion_matrix
 
 from .config import MODEL_NAMES
 from .statistics import mean_ci
+
+
+def figures_code_sha256() -> str:
+    """Fingerprint the implementation that renders publication figures."""
+    return hashlib.sha256(Path(__file__).read_bytes()).hexdigest()
 
 
 def _save_figure(figure: plt.Figure, output_dir: Path, stem: str) -> None:
@@ -98,8 +104,7 @@ def plot_performance_overview(statistics_dir: Path, output_dir: Path, metric: st
     flat_axes = np.atleast_1d(axes).ravel()
     for axis, group in zip(flat_axes, groups, strict=False):
         values = subjects.loc[
-            (subjects["dataset"] == group.dataset)
-            & (subjects["protocol"] == group.protocol)
+            (subjects["dataset"] == group.dataset) & (subjects["protocol"] == group.protocol)
         ]
         for model_index, model in enumerate(MODEL_NAMES):
             model_values = values.loc[values["model"] == model, "value"].to_numpy(float)
@@ -135,9 +140,7 @@ def plot_seed_variability(statistics_dir: Path, output_dir: Path) -> None:
     table = pd.read_csv(statistics_dir / "descriptive_subject_seed_variability.csv")
     selected = table.loc[(table["condition"] == "full") & (table["ica_policy"] == "none")]
     groups = list(
-        selected[["dataset", "protocol", "metric"]]
-        .drop_duplicates()
-        .itertuples(index=False)
+        selected[["dataset", "protocol", "metric"]].drop_duplicates().itertuples(index=False)
     )
     figure, axis = plt.subplots(figsize=(12, max(5, len(groups) * 0.35)))
     for index, group in enumerate(groups):
@@ -169,9 +172,9 @@ def plot_ica_sensitivity(statistics_dir: Path, output_dir: Path) -> None:
         & (table["protocol"] == "within_split")
         & (table["condition"] == "full")
     ]
-    subject_means = selected.groupby(
-        ["metric", "model", "subject", "ica_policy"], observed=True
-    )["value"].mean()
+    subject_means = selected.groupby(["metric", "model", "subject", "ica_policy"], observed=True)[
+        "value"
+    ].mean()
     figure, axes = plt.subplots(1, 2, figsize=(11, 4), sharey=False)
     for axis, metric in zip(axes, ("accuracy", "kappa"), strict=True):
         metric_values = subject_means.loc[metric].unstack("ica_policy")
@@ -214,7 +217,7 @@ def plot_latency(results_dir: Path, output_dir: Path) -> None:
 def plot_primary_confusion_matrices(cells_dir: Path, output_dir: Path) -> None:
     by_model: dict[str, list[np.ndarray]] = {model: [] for model in MODEL_NAMES}
     by_subject_seed: dict[tuple[str, str, int], list[np.ndarray]] = {}
-    for path in sorted(cells_dir.glob("MI-OpenBCI__within_split__full__ica-none__*.json")):
+    for path in sorted(cells_dir.glob("MI-OpenBCI__within_session__full__ica-none__*.json")):
         payload = json.loads(path.read_text(encoding="utf-8"))
         key = (str(payload["model"]), str(payload["subject"]), int(payload["seed"]))
         matrix = confusion_matrix(

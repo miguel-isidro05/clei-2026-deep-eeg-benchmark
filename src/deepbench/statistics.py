@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import itertools
 import json
 from pathlib import Path
@@ -10,6 +11,8 @@ import numpy as np
 import pandas as pd
 import scipy.stats
 from statsmodels.stats.multitest import multipletests
+
+from .config import PAPER_EPOCHS
 
 CELL_KEYS = [
     "dataset",
@@ -34,6 +37,11 @@ GLOBAL_COMPATIBILITY_KEYS = (
     "deterministic_policy",
     "environment_sha256",
 )
+
+
+def statistics_code_sha256() -> str:
+    """Fingerprint the implementation that produces inferential tables."""
+    return hashlib.sha256(Path(__file__).read_bytes()).hexdigest()
 
 
 def _validate_run_configurations(payloads: list[dict[str, object]]) -> None:
@@ -332,6 +340,7 @@ def sample_accounting_table(payloads: list[dict[str, object]]) -> pd.DataFrame:
         for fold_index, report in enumerate(payload.get("fold_reports", [])):
             train_counts = report.get("train_class_counts", {})
             test_counts = report.get("test_class_counts", {})
+            training_history = report.get("training_history", [])
             records.append(
                 {
                     **identity,
@@ -341,6 +350,9 @@ def sample_accounting_table(payloads: list[dict[str, object]]) -> pd.DataFrame:
                     "n_train_trials": report.get("n_train_trials"),
                     "n_train_examples": report.get("n_train_examples"),
                     "n_test_trials": report.get("n_test_trials"),
+                    "optimizer_updates": sum(
+                        int(epoch.get("train_batch_count", 0)) for epoch in training_history
+                    ),
                     "train_class_0": train_counts.get("0"),
                     "train_class_1": train_counts.get("1"),
                     "test_class_0": test_counts.get("0"),
@@ -348,6 +360,50 @@ def sample_accounting_table(payloads: list[dict[str, object]]) -> pd.DataFrame:
                 }
             )
     return pd.DataFrame(records)
+
+
+def validate_matched_augmentation_compute(
+    payloads: list[dict[str, object]], *, strict: bool = False
+) -> None:
+    """Reject augmentation pairs with unequal examples or optimizer updates."""
+    matched: dict[tuple[object, ...], dict[str, tuple[int, tuple[int, ...]]]] = {}
+    conditions = {"center_x2", "nonoverlap", "center_x6", "overlap"}
+    for payload in payloads:
+        condition = str(payload.get("condition"))
+        if condition not in conditions:
+            continue
+        base = tuple(
+            payload.get(key)
+            for key in ("dataset", "protocol", "ica_policy", "model", "subject", "seed")
+        )
+        for fold_index, report in enumerate(payload.get("fold_reports", [])):
+            batches_per_epoch = tuple(
+                int(epoch.get("train_batch_count", 0))
+                for epoch in report.get("training_history", [])
+            )
+            if strict and len(batches_per_epoch) != PAPER_EPOCHS:
+                raise ValueError(
+                    f"Compute audit for {(*base, fold_index)} requires "
+                    f"{PAPER_EPOCHS} recorded epochs"
+                )
+            matched.setdefault((*base, fold_index), {})[condition] = (
+                int(report["n_train_examples"]),
+                batches_per_epoch,
+            )
+    for key, values in matched.items():
+        for control, candidate in (
+            ("center_x2", "nonoverlap"),
+            ("center_x6", "overlap"),
+        ):
+            present = {control, candidate} & set(values)
+            if strict and present and present != {control, candidate}:
+                missing = {control, candidate} - present
+                raise ValueError(f"Compute audit for {key} is missing {sorted(missing)}")
+            if present == {control, candidate} and values[control] != values[candidate]:
+                raise ValueError(
+                    f"Compute mismatch for {key}: {control}={values[control]} "
+                    f"and {candidate}={values[candidate]}"
+                )
 
 
 def write_statistics(
@@ -360,6 +416,10 @@ def write_statistics(
 ) -> None:
     output_dir.mkdir(parents=True, exist_ok=True)
     frame = load_cells(cells_dir)
+    payloads = [
+        json.loads(path.read_text(encoding="utf-8")) for path in sorted(cells_dir.glob("*.json"))
+    ]
+    validate_matched_augmentation_compute(payloads, strict=not force_exploratory)
     completeness = completeness_table(frame, expected_seeds)
     completeness.to_csv(output_dir / "completeness.csv", index=False)
     incomplete = force_exploratory or not bool(completeness["complete"].all())
@@ -368,12 +428,7 @@ def write_statistics(
     outputs = {
         "all_seed_metrics.csv": frame,
         "descriptive_subject_seed_variability.csv": descriptive_table(frame),
-        "sample_accounting.csv": sample_accounting_table(
-            [
-                json.loads(path.read_text(encoding="utf-8"))
-                for path in sorted(cells_dir.glob("*.json"))
-            ]
-        ),
+        "sample_accounting.csv": sample_accounting_table(payloads),
     }
     if incomplete:
         (output_dir / "INCOMPLETE_EXPLORATORY_ONLY.txt").write_text(

@@ -2,13 +2,20 @@
 
 from __future__ import annotations
 
+import hashlib
 import platform
 import time
+from pathlib import Path
 
 import numpy as np
 import torch
 
 from .models import make_module, parameter_count
+
+
+def latency_code_sha256() -> str:
+    """Fingerprint the model-forward latency implementation."""
+    return hashlib.sha256(Path(__file__).read_bytes()).hexdigest()
 
 
 def latency_environment(device: str) -> dict[str, object]:

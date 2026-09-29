@@ -11,7 +11,7 @@ import pandas as pd
 from .config import MODEL_NAMES, PAPER_EPOCHS, PAPER_SEEDS
 from .models import recipe_dict
 from .paper_profile import paper_profile_metadata
-from .runner import cell_path
+from .runner import _code_fingerprint, cell_path
 
 REQUIRED_PHASES = {"primary", "external", "ica-sensitivity"}
 
@@ -34,7 +34,16 @@ def _validate_manifest_profile(payload: dict[str, object], path: Path) -> list[s
     if phase not in {*REQUIRED_PHASES, "all"}:
         return [f"{path.name} has unsupported phase={phase!r}"]
     expected = paper_profile_metadata(phase)
-    keys = ("profile_version", "models", "seeds", "epochs", "blocks", "recipes", "profile_sha256")
+    keys = (
+        "profile_version",
+        "models",
+        "seeds",
+        "epochs",
+        "blocks",
+        "recipes",
+        "scientific_code_sha256",
+        "profile_sha256",
+    )
     return [
         f"{path.name} does not match the frozen paper profile field {key!r}"
         for key in keys
@@ -62,6 +71,8 @@ def _validate_present_cells(results_dir: Path, present: set[str]) -> list[str]:
             continue
         if configuration.get("epochs") != PAPER_EPOCHS:
             issues.append(f"{relative} was not trained for exactly {PAPER_EPOCHS} epochs")
+        if configuration.get("code_sha256") != _code_fingerprint():
+            issues.append(f"{relative} was produced by a different scientific code version")
         if _json_canonical(configuration.get("recipe")) != _json_canonical(expected_recipes[model]):
             issues.append(f"{relative} has a non-frozen training recipe for {model}")
         if payload.get("seed") not in PAPER_SEEDS:

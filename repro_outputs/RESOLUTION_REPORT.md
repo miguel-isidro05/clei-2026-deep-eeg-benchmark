@@ -9,7 +9,7 @@ Fecha: 2026-09-27
 | 5-fold ausente | `within_session` se añadió al bloque primario | `src/deepbench/paper_profile.py` y 250 celdas planificadas |
 | BNCI2014_001 no task-matched | El perfil usa Zhou2020 y Tavakolan2017, ambos `right_hand` versus `rest` y multisesión | `docs/MOABB_DATASET_INVENTORY.md` |
 | Procedencia de hiperparámetros | Cada receta registra `provenance_id` y política sin test tuning | `docs/HYPERPARAMETER_PROVENANCE.md` |
-| Identidad de entorno/datos | El fingerprint incluye versiones científicas, origen/commit de dependencias VCS y SHA-256 de los arrays estandarizados | `src/deepbench/runner.py`, smoke real |
+| Identidad de entorno/datos | El fingerprint incluye versiones científicas, origen/commit de dependencias VCS y SHA-256 de épocas cargadas; cada fold añade hashes posteriores al preprocesamiento y de entrada al modelo | `src/deepbench/runner.py`, `src/deepbench/preprocessing.py`, `src/deepbench/evaluation.py` |
 | Tamaño de efecto | Cada contraste añade correlación rank-biserial pareada | `src/deepbench/statistics.py` |
 | Contabilidad de muestras | Se genera `sample_accounting.csv` con trials, ejemplos y clases por fold | `src/deepbench/statistics.py` |
 | TeX histórico incompatible | Se creó `manuscript/revision_v2` sin CSP, DeepConvNet, Friedman, bootstrap ni números antiguos | `manuscript/revision_v2/paper_CLEI2026.tex` |
@@ -22,7 +22,7 @@ Stieger2021. Stieger2021 queda fuera por su costo, tamaño y licencia no comerci
 
 ## Evidencia de ejecución
 
-- 52 pruebas aprobadas.
+- 60 pruebas aprobadas.
 - Ruff aprobado.
 - Preflight de las cinco arquitecturas y del lector BCI2000 aprobado.
 - Plan paper: 3.600 celdas, incluidas 250 `within_session`, 800 `cross_session` y controles
@@ -43,9 +43,13 @@ Stieger2021. Stieger2021 queda fuera por su costo, tamaño y licencia no comerci
   esperadas y presentes; cualquier ausencia o celda extra bloquea Wilcoxon-Holm.
 - La duración se documentó por dataset: cuatro segundos para MI-OpenBCI/Zhou2020 y tres para
   Tavakolan2017, idéntica entre modelos dentro de cada dataset.
+- La segunda revisión independiente corrigió la salida primaria para usar `within_session`
+  cinco-fold en el bloque LaTeX, incluyó la matriz de confusión primaria y endureció el preflight
+  de Cayetano a dos GPU visibles.
 
 ## Pendiente legítimo
 
 No existen todavía resultados completos. `generated_results.tex` contiene un aviso explícito y no
-debe sustituirse hasta que la auditoría de celdas y seeds termine sin faltantes. La compilación TeX
-no pudo probarse en esta máquina porque no hay un motor LaTeX instalado.
+debe sustituirse hasta que la auditoría de celdas y seeds termine sin faltantes. La compilación con
+el compilador integrado de Codex no pudo probar el documento completo porque ese compilador ejecuta
+el `.tex` aislado y no resuelve el archivo incluido `generated_results.tex`.

@@ -13,6 +13,7 @@ from deepbench.statistics import (
     paired_model_tests,
     paired_rank_biserial,
     sample_accounting_table,
+    validate_matched_augmentation_compute,
     write_statistics,
 )
 
@@ -92,6 +93,10 @@ def test_sample_accounting_exports_fold_class_counts() -> None:
                     "n_test_trials": 4,
                     "train_class_counts": {"0": 5, "1": 5},
                     "test_class_counts": {"0": 2, "1": 2},
+                    "training_history": [
+                        {"train_batch_count": 2},
+                        {"train_batch_count": 2},
+                    ],
                 }
             ],
         }
@@ -103,6 +108,63 @@ def test_sample_accounting_exports_fold_class_counts() -> None:
     assert table.iloc[0]["train_class_1"] == 5
     assert table.iloc[0]["test_class_0"] == 2
     assert table.iloc[0]["test_class_1"] == 2
+    assert table.iloc[0]["optimizer_updates"] == 4
+
+
+def test_compute_matched_augmentation_rejects_unequal_updates() -> None:
+    def payload(condition: str, examples: int, batches: int) -> dict[str, object]:
+        return {
+            "dataset": "D",
+            "protocol": "within_split",
+            "ica_policy": "none",
+            "model": "EEGNet",
+            "subject": "1",
+            "seed": 0,
+            "condition": condition,
+            "fold_reports": [
+                {
+                    "n_train_examples": examples,
+                    "training_history": [{"train_batch_count": batches}],
+                }
+            ],
+        }
+
+    validate_matched_augmentation_compute(
+        [payload("center_x2", 20, 2), payload("nonoverlap", 20, 2)]
+    )
+    with pytest.raises(ValueError, match="Compute mismatch"):
+        validate_matched_augmentation_compute(
+            [payload("center_x6", 60, 6), payload("overlap", 60, 7)]
+        )
+    with pytest.raises(ValueError, match="Compute mismatch"):
+        validate_matched_augmentation_compute(
+            [
+                {
+                    **payload("center_x2", 20, 2),
+                    "fold_reports": [
+                        {
+                            "n_train_examples": 20,
+                            "training_history": [
+                                {"train_batch_count": 2},
+                                {"train_batch_count": 3},
+                            ],
+                        }
+                    ],
+                },
+                {
+                    **payload("nonoverlap", 20, 2),
+                    "fold_reports": [
+                        {
+                            "n_train_examples": 20,
+                            "training_history": [
+                                {"train_batch_count": 3},
+                                {"train_batch_count": 2},
+                            ],
+                        }
+                    ],
+                },
+            ]
+        )
 
 
 def test_paired_models_require_identical_subject_cohorts() -> None:

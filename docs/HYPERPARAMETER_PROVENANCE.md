@@ -30,8 +30,10 @@ FBCNet aplica internamente seis subbandas: 8-12, 12-16, 16-20, 20-24, 24-28 y 28
 restringieron a la banda común porque el preprocessing ya elimina frecuencias fuera de 8-30 Hz.
 
 La receta completa se serializa dentro de cada celda. El fingerprint incluye la receta, el código,
-las versiones del stack científico y el SHA-256 de los arrays estandarizados consumidos por cada
-sujeto o cohorte LOSO. Para dependencias instaladas desde un repositorio, también incorpora el
+las versiones del stack científico y el SHA-256 de las épocas cargadas, remuestreadas y recortadas
+de cada sujeto o cohorte LOSO. Cada fold guarda además hashes de train y test después del
+preprocesamiento, así como de las entradas finales entregadas al modelo. Para dependencias
+instaladas desde un repositorio, también incorpora el
 contenido de `direct_url.json`; por tanto, Tavakolan2017 registra el commit exacto de
 BCI2kReader y no solo su versión declarada `0.31.dev0`. La revisión Git del benchmark se conserva
 como metadato de auditoría, pero se excluye del hash operativo: un commit que solo cambie

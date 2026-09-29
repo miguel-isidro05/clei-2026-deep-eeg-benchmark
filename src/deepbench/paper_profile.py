@@ -8,6 +8,7 @@ from typing import TypedDict
 
 from .config import MODEL_NAMES, PAPER_EPOCHS, PAPER_PROFILE_VERSION, PAPER_SEEDS
 from .models import recipe_dict
+from .runner import _code_fingerprint
 
 
 class PaperBlock(TypedDict):
@@ -71,6 +72,7 @@ def paper_profile_metadata(phase: str) -> dict[str, object]:
         "epochs": PAPER_EPOCHS,
         "blocks": paper_blocks(phase),
         "recipes": {model: recipe_dict(model, PAPER_EPOCHS) for model in MODEL_NAMES},
+        "scientific_code_sha256": _code_fingerprint(),
     }
     canonical = json.dumps(profile, sort_keys=True, separators=(",", ":"))
     profile["profile_sha256"] = hashlib.sha256(canonical.encode()).hexdigest()

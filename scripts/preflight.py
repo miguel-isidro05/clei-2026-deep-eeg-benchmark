@@ -28,10 +28,16 @@ from deepbench.signal_quality import signal_quality_metadata, signal_quality_tab
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--require-cuda", action="store_true")
+    parser.add_argument("--min-cuda-devices", type=int, default=1)
     parser.add_argument("--quality-output-dir", type=Path, default=RESULTS_DIR / "quality")
     args = parser.parse_args()
     if args.require_cuda and not torch.cuda.is_available():
         raise SystemExit("CUDA is required but torch.cuda.is_available() is False")
+    if args.require_cuda and torch.cuda.device_count() < args.min_cuda_devices:
+        raise SystemExit(
+            f"CUDA device_count={torch.cuda.device_count()} but {args.min_cuda_devices} "
+            "visible CUDA devices are required"
+        )
     print(f"device={get_device()} torch={torch.__version__}")
     if torch.cuda.is_available():
         print(f"cuda_device={torch.cuda.get_device_name(0)}")

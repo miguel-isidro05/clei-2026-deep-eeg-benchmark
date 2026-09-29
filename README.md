@@ -33,7 +33,7 @@ En PowerShell, luego de copiar los archivos MAT de MI-OpenBCI a una carpeta loca
 ```powershell
 $env:CLEI_DATA_DIR="D:\datos\Database-MIOpenBCI-main"
 $env:MNE_DATA="D:\datos\mne"
-python scripts\preflight.py --require-cuda
+python scripts\preflight.py --require-cuda --min-cuda-devices 2
 python scripts\download_moabb.py --datasets Zhou2020 Tavakolan2017
 ```
 
@@ -42,7 +42,7 @@ En Linux o WSL2:
 ```bash
 export CLEI_DATA_DIR=/datos/Database-MIOpenBCI-main
 export MNE_DATA=/datos/mne
-python scripts/preflight.py --require-cuda
+python scripts/preflight.py --require-cuda --min-cuda-devices 2
 python scripts/download_moabb.py --datasets Zhou2020 Tavakolan2017
 ```
 
@@ -84,8 +84,15 @@ python scripts/run_experiments.py \
 
 ## Perfil completo del paper
 
-El proceso es reanudable: una celda ya terminada se omite. Ejecute las fases dentro de `tmux` o
-de un job persistente. No use `--overwrite` al reanudar.
+El proceso es reanudable: una celda ya terminada se omite. En la PC de Cayetano, la ruta
+recomendada usa las dos GPU, conserva la consola completa y genera tablas, figuras y el bloque
+LaTeX de resultados:
+
+```bash
+bash scripts/run_cayetano.sh
+```
+
+No use `--overwrite` al reanudar. La ejecución manual equivalente es:
 
 ```bash
 python scripts/run_paper.py --phase all --plan-only
@@ -94,6 +101,9 @@ python scripts/run_paper.py --phase external --device cuda
 python scripts/run_paper.py --phase ica-sensitivity --device cuda
 python scripts/profile_latency.py --device cuda
 python scripts/run_statistics.py
+python scripts/generate_figures.py
+python scripts/generate_manuscript_results.py
+python scripts/write_run_report.py
 ```
 
 `run_statistics.py` solo genera inferencia confirmatoria cuando encuentra el manifiesto completo
@@ -151,11 +161,18 @@ mucho espacio. Agregue `--save-weights` solo si necesita archivar cada modelo.
 - `results/statistics/expected_cell_audit.csv`: producto esperado del perfil; detecta incluso
   modelos, sujetos o condiciones totalmente ausentes.
 - `results/statistics/sample_accounting.csv`: trials, ejemplos, folds y conteos de clase por
-  celda, incluida la multiplicacion producida por ventanas.
+  celda, incluida la multiplicacion producida por ventanas y las actualizaciones del optimizador.
+- `results/statistics/statistics_manifest.json`: hashes que vinculan celdas, código estadístico y
+  cada CSV.
+- `results/figures/figures_manifest.json`: hashes de todos los PDF y del código de figuras.
+- `results/latency/latency_manifest.json`: hash del CSV, perfil de medición, entorno y código de
+  latencia.
 - `results/latency/`: latencia controlada de forward pass.
 - `results/quality/`: auditoria no destructiva de calidad de señal, conteos y flags.
 - `results/figures/`: figuras PNG/PDF generadas solo tras pasar el gate confirmatorio.
 - `results/logs/` y `results/EXPERIMENT_LOG.md`: consola completa y resumen auditable de corrida.
+- `manuscript/revision_v2/generated_results.tex`: tablas y referencias a figuras, generado solo
+  después del gate confirmatorio.
 
 ## Que significa la latencia
 

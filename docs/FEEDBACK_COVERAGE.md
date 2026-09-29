@@ -2,6 +2,7 @@
 
 | Observacion | Solucion implementada | Evidencia generada | Estado antes de ejecutar el perfil paper |
 |---|---|---|---|
+| Alcance de modelos | Por decision explicita del autor, el benchmark nuevo queda restringido a EEGNet, FBCNet, ShallowConvNet, EEGConformer y EEGInceptionMI; CSP/CNN2D/ATCNet quedan fuera de esta revision | `docs/EXPERIMENT_SPEC.md`, `src/deepbench/config.py` | Cerrado como decision de alcance, no como resultado empirico |
 | Cohorte low-cost pequena | Se evita pseudorreplicacion, se informa cada sujeto y se añade validacion externa task-matched en 20 sujetos Zhou2020 y 12 sujetos Tavakolan2017 | Tablas separadas por dataset/protocolo | Mitigado, no cerrado: MI-OpenBCI sigue teniendo 10 sujetos y las seeds no aumentan el n biologico |
 | Una sola semilla limita la robustez | Cinco semillas independientes por modelo, sujeto y protocolo | JSON por celda, tabla de variabilidad entre sujetos y entre semillas | Implementado; pendiente completar computo GPU |
 | Falta inferencia pareada y correccion multiple | Wilcoxon bilateral por sujeto y Holm por familia predeclarada | `paired_wilcoxon_holm.csv` | Implementado; pendiente resultados completos |

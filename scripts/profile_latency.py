@@ -5,11 +5,12 @@ from __future__ import annotations
 
 import argparse
 import csv
+import hashlib
 from pathlib import Path
 
 from deepbench.config import MODEL_NAMES, RESULTS_DIR, TARGET_SFREQ, TRIAL_SAMPLES
 from deepbench.io import write_json_atomic
-from deepbench.latency import latency_environment, profile_model
+from deepbench.latency import latency_code_sha256, latency_environment, profile_model
 from deepbench.reproducibility import get_device
 
 
@@ -48,6 +49,24 @@ def main() -> None:
         writer = csv.DictWriter(handle, fieldnames=list(rows[0]))
         writer.writeheader()
         writer.writerows(rows)
+    write_json_atomic(
+        args.output_dir / "latency_manifest.json",
+        {
+            "latency_csv_sha256": hashlib.sha256(
+                (args.output_dir / "latency.csv").read_bytes()
+            ).hexdigest(),
+            "environment": environment,
+            "latency_code_sha256": latency_code_sha256(),
+            "profile": {
+                "device": args.device,
+                "n_chans": args.n_chans,
+                "n_times": args.n_times,
+                "batch_sizes": args.batch_sizes,
+                "warmup": args.warmup,
+                "iterations": args.iterations,
+            },
+        },
+    )
     print(f"Latency written to {args.output_dir}")
 
 

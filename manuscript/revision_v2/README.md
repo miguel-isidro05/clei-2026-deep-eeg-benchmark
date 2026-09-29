@@ -14,6 +14,11 @@ Los valores numéricos solo se incorporarán después de que `scripts/run_statis
 - cohortes idénticas para cada contraste pareado;
 - tablas Wilcoxon-Holm, intervalos y tamaños de efecto completas.
 
+Tras una corrida válida, `scripts/generate_manuscript_results.py` sustituye automáticamente el
+aviso de pendiente por tablas y referencias a figuras generadas desde los mismos resultados. El
+gate exige los manifiestos con hash de estadísticas, figuras y latencia. El TeX incluye la tabla
+principal de Wilcoxon-Holm con IC, tamaño de efecto y decisión corregida.
+
 Compilación de control:
 
 ```bash

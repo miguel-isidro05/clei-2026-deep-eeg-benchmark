@@ -6,7 +6,7 @@
 2. Clonar el repositorio y crear el entorno con `conda env create -f environment.yml`.
 3. Activar `deep-eeg-clei`.
 4. Definir `CLEI_DATA_DIR` y `MNE_DATA` como se muestra en el README.
-5. Ejecutar `python scripts/preflight.py --require-cuda`. No continuar si no termina en `preflight=OK`.
+5. Ejecutar `python scripts/preflight.py --require-cuda --min-cuda-devices 2`. No continuar si no termina en `preflight=OK`.
 6. Descargar primero los datos con
    `python scripts/download_moabb.py --datasets Zhou2020 Tavakolan2017`.
 
@@ -46,8 +46,8 @@ bash scripts/run_cayetano.sh
 ```
 
 El script escribe `results/logs/paper-*.log`, `results/EXPERIMENT_LOG.md`, tablas, latencia y
-figuras. Si prefiere ejecutar manualmente, use cada fase por separado dentro de `tmux`, `screen` o
-un job persistente:
+figuras, y actualiza `manuscript/revision_v2/generated_results.tex`. Si prefiere ejecutar
+manualmente, use cada fase por separado dentro de `tmux`, `screen` o un job persistente:
 
 ```bash
 python scripts/run_paper.py --phase all --plan-only
@@ -69,7 +69,8 @@ vez de mezclar resultados; use una nueva carpeta o `--overwrite` conscientemente
 python scripts/profile_latency.py --device cuda
 python scripts/run_statistics.py
 python scripts/generate_figures.py
-python scripts/write_run_report.py
+python scripts/generate_manuscript_results.py
+python scripts/write_run_report.py --status completed
 pytest
 ruff check .
 ```
@@ -80,3 +81,7 @@ o un `expected=False` en `expected_cell_audit.csv`, o si existe un `complete=Fal
 manifiestos de fase. Conserve juntos
 `results/cells`, `results/manifests`, `results/statistics`, `results/quality`, `results/latency`,
 `results/figures`, `results/logs` y `results/EXPERIMENT_LOG.md`.
+
+Si la sesión se interrumpe, vuelva a ejecutar `bash scripts/run_cayetano.sh`. Las celdas y folds
+compatibles se omiten. No mezcle una carpeta `results` creada con otro commit o perfil: el
+fingerprint y el auditor la rechazarán.
