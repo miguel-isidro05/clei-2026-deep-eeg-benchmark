@@ -2,9 +2,6 @@
 set -Eeuo pipefail
 
 RESULTS_ROOT="${DEEP_EEG_RESULTS_DIR:-results_validation_no_loso_v7}"
-VALIDATION_SEED="${VALIDATION_SEED:-0}"
-VALIDATION_EPOCHS="${VALIDATION_EPOCHS:-300}"
-VALIDATION_SCOPE="${VALIDATION_SCOPE:-peterson}"
 VALIDATION_DEVICE="${VALIDATION_DEVICE:-cuda:0}"
 mkdir -p "${RESULTS_ROOT}/logs"
 RUN_STAMP="$(date -u +%Y%m%dT%H%M%SZ)"
@@ -23,46 +20,25 @@ finish_report() {
 }
 trap 'finish_report "$?"' EXIT
 
-if [[ "${VALIDATION_SCOPE}" != "peterson" && "${VALIDATION_SCOPE}" != "both" ]]; then
-  echo "VALIDATION_SCOPE must be peterson or both" >&2
-  exit 2
-fi
-
 echo "validation_started_utc=${RUN_STAMP}"
 echo "git_revision=$(git rev-parse HEAD)"
 echo "validation_role=diagnostic_not_confirmatory"
-echo "validation_scope=${VALIDATION_SCOPE}"
-echo "validation_seed=${VALIDATION_SEED}"
+echo "validation_scope=both_datasets_all_blocks_except_loso"
 
 python -u scripts/preflight.py --require-cuda --min-cuda-devices 1 \
   --quality-output-dir "${RESULTS_ROOT}/quality"
-python -u scripts/check_peterson_csp.py \
+python -u scripts/audit_signal_quality.py \
+  --datasets MI-OpenBCI Souza2023 --output-dir "${RESULTS_ROOT}/quality"
+python -u scripts/check_low_cost_csp.py --dataset MI-OpenBCI \
   --output "${RESULTS_ROOT}/quality/peterson_csp_sanity.json"
+python -u scripts/check_low_cost_csp.py --dataset Souza2023 \
+  --output "${RESULTS_ROOT}/quality/souza_csp_sanity.json"
 
-python -u scripts/run_experiments.py \
-  --dataset MI-OpenBCI \
-  --models EEGNet FBCNet ShallowConvNet EEGConformer EEGInceptionMI \
-  --protocols within_split within_session \
-  --conditions full \
-  --seeds "${VALIDATION_SEED}" \
-  --epochs "${VALIDATION_EPOCHS}" \
-  --ica-policy none \
-  --device "${VALIDATION_DEVICE}" \
-  --output-dir "${RESULTS_ROOT}"
-
-if [[ "${VALIDATION_SCOPE}" == "both" ]]; then
-  python -u scripts/run_experiments.py \
-    --dataset Souza2023 \
-    --models EEGNet FBCNet ShallowConvNet EEGConformer EEGInceptionMI \
-    --protocols within_split within_session cross_session \
-    --conditions full \
-    --seeds "${VALIDATION_SEED}" \
-    --epochs "${VALIDATION_EPOCHS}" \
-    --ica-policy none \
-    --device "${VALIDATION_DEVICE}" \
-    --output-dir "${RESULTS_ROOT}"
-fi
+python -u scripts/run_paper.py --phase no-loso \
+  --device "${VALIDATION_DEVICE}" --output-dir "${RESULTS_ROOT}"
 
 python -u scripts/run_statistics.py \
-  --results-dir "${RESULTS_ROOT}" --seeds "${VALIDATION_SEED}" --allow-incomplete
+  --results-dir "${RESULTS_ROOT}" --allow-incomplete
+python -u scripts/profile_latency.py \
+  --device "${VALIDATION_DEVICE}" --output-dir "${RESULTS_ROOT}/latency"
 echo "validation_completed_utc=$(date -u +%Y%m%dT%H%M%SZ)"

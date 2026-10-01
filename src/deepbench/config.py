@@ -15,7 +15,7 @@ MODEL_NAMES: tuple[str, ...] = (
 )
 PAPER_SEEDS: tuple[int, ...] = (0, 1, 2, 3, 4)
 PAPER_EPOCHS = 300
-PAPER_PROFILE_VERSION = "clei2026-deep-v6"
+PAPER_PROFILE_VERSION = "clei2026-deep-v7"
 SPLIT_SEED = 2026
 TARGET_SFREQ = 128.0
 TRIAL_SECONDS = 4.0

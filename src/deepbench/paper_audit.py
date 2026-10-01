@@ -31,7 +31,7 @@ def result_cells_sha256(results_dir: Path) -> str:
 
 def _validate_manifest_profile(payload: dict[str, object], path: Path) -> list[str]:
     phase = str(payload.get("phase", ""))
-    if phase not in {*REQUIRED_PHASES, "all"}:
+    if phase not in {*REQUIRED_PHASES, "peterson", "souza", "no-loso", "all"}:
         return [f"{path.name} has unsupported phase={phase!r}"]
     expected = paper_profile_metadata(phase)
     keys = (

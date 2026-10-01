@@ -20,15 +20,26 @@ class PaperBlock(TypedDict):
 
 def paper_blocks(phase: str) -> list[PaperBlock]:
     """Return the predeclared blocks without inspecting any result."""
-    if phase not in {"peterson", "souza", "primary", "ica-sensitivity", "all"}:
+    if phase not in {
+        "peterson",
+        "souza",
+        "primary",
+        "ica-sensitivity",
+        "no-loso",
+        "all",
+    }:
         raise ValueError(f"Unsupported paper phase: {phase}")
     blocks: list[PaperBlock] = []
-    if phase in {"peterson", "primary", "all"}:
+    if phase in {"peterson", "primary", "no-loso", "all"}:
         blocks.extend(
             [
                 {
                     "dataset": "MI-OpenBCI",
-                    "protocols": ["within_split", "within_session", "loso"],
+                    "protocols": (
+                        ["within_split", "within_session"]
+                        if phase == "no-loso"
+                        else ["within_split", "within_session", "loso"]
+                    ),
                     "conditions": ["full"],
                     "ica_policy": "none",
                 },
@@ -40,12 +51,16 @@ def paper_blocks(phase: str) -> list[PaperBlock]:
                 },
             ]
         )
-    if phase in {"souza", "primary", "all"}:
+    if phase in {"souza", "primary", "no-loso", "all"}:
         blocks.extend(
             [
                 {
                     "dataset": "Souza2023",
-                    "protocols": ["within_split", "within_session", "cross_session", "loso"],
+                    "protocols": (
+                        ["within_split", "within_session", "cross_session"]
+                        if phase == "no-loso"
+                        else ["within_split", "within_session", "cross_session", "loso"]
+                    ),
                     "conditions": ["full"],
                     "ica_policy": "none",
                 },
@@ -57,7 +72,7 @@ def paper_blocks(phase: str) -> list[PaperBlock]:
                 },
             ]
         )
-    if phase in {"ica-sensitivity", "all"}:
+    if phase in {"ica-sensitivity", "no-loso", "all"}:
         blocks.extend(
             {
                 "dataset": dataset,

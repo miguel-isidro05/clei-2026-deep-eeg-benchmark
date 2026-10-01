@@ -52,7 +52,7 @@ def _apply_train_fitted_ica(
     train_epochs = mne.EpochsArray(np.asarray(x_train, np.float64), info, verbose="ERROR")
     test_epochs = mne.EpochsArray(np.asarray(x_test, np.float64), info, verbose="ERROR")
     ica = ICA(
-        n_components=0.99,
+        n_components=None,
         method="fastica",
         random_state=seed,
         max_iter="auto",
@@ -88,6 +88,8 @@ def _apply_train_fitted_ica(
         "n_iterations": int(ica.n_iter_),
         "failure_policy": "raise_and_do_not_write_cell",
         "n_components": int(ica.n_components_),
+        "n_components_parameter": None,
+        "pca_nonzero_variance_threshold": 0.999999,
         "kurtosis_threshold": float(kurtosis_threshold),
         "max_excluded": int(max_excluded),
         "component_kurtosis": [float(value) for value in kurtosis],

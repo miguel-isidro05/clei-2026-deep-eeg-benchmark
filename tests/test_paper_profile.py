@@ -88,3 +88,13 @@ def test_no_loso_profile_runs_every_other_low_cost_block() -> None:
         "cross_session",
     ]
     assert sum(block["ica_policy"] == "kurtosis" for block in blocks) == 2
+    subject_counts = {"MI-OpenBCI": 10, "Souza2023": 5}
+    planned_cells = sum(
+        len(block["protocols"])
+        * len(block["conditions"])
+        * 5
+        * 5
+        * subject_counts[block["dataset"]]
+        for block in blocks
+    )
+    assert planned_cells == 2750
