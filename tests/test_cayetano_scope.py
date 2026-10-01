@@ -26,16 +26,13 @@ def test_cayetano_run_is_limited_to_peterson_and_souza() -> None:
     assert "Tavakolan2017" not in runner
 
 
-def test_validation_run_uses_one_gpu_and_excludes_loso() -> None:
+def test_validation_run_uses_one_gpu_and_runs_both_datasets_without_loso() -> None:
     runner = (ROOT / "run_validation_no_loso.sh").read_text(encoding="utf-8")
 
     assert "--min-cuda-devices 1" in runner
-    assert "--dataset MI-OpenBCI" in runner
-    assert "--protocols within_split within_session" in runner
-    assert "--dataset Souza2023" in runner
-    assert "--protocols within_split within_session cross_session" in runner
-    assert "--ica-policy none" in runner
-    assert '--seeds "${VALIDATION_SEED}"' in runner
-    assert "--protocols within_split within_session loso" not in runner
-    assert "--protocols within_split within_session cross_session loso" not in runner
+    assert "check_low_cost_csp.py --dataset MI-OpenBCI" in runner
+    assert "check_low_cost_csp.py --dataset Souza2023" in runner
+    assert "--phase no-loso" in runner
+    assert "VALIDATION_SCOPE" not in runner
+    assert "VALIDATION_SEED" not in runner
     assert "results_validation_no_loso_v7" in runner

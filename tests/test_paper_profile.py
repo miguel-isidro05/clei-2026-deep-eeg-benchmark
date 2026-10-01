@@ -60,3 +60,31 @@ def test_augmentation_profile_uses_compute_matched_controls() -> None:
         for block in augmentations
     )
     assert PAPER_EPOCHS == 300
+
+
+def test_no_loso_profile_runs_every_other_low_cost_block() -> None:
+    blocks = paper_blocks("no-loso")
+
+    assert {block["dataset"] for block in blocks} == {"MI-OpenBCI", "Souza2023"}
+    assert all("loso" not in block["protocols"] for block in blocks)
+    peterson_full = next(
+        block
+        for block in blocks
+        if block["dataset"] == "MI-OpenBCI"
+        and block["conditions"] == ["full"]
+        and block["ica_policy"] == "none"
+    )
+    souza_full = next(
+        block
+        for block in blocks
+        if block["dataset"] == "Souza2023"
+        and block["conditions"] == ["full"]
+        and block["ica_policy"] == "none"
+    )
+    assert peterson_full["protocols"] == ["within_split", "within_session"]
+    assert souza_full["protocols"] == [
+        "within_split",
+        "within_session",
+        "cross_session",
+    ]
+    assert sum(block["ica_policy"] == "kurtosis" for block in blocks) == 2

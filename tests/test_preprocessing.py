@@ -96,3 +96,30 @@ def test_moabb_loader_bandpass_skips_duplicate_initial_filter() -> None:
     )
     assert result.report["initial_bandpass_source"] == "dataset_loader"
     assert result.report["initial_bandpass_applied"] is False
+
+
+def test_ica_keeps_multiple_components_when_one_pca_component_dominates() -> None:
+    rng = np.random.default_rng(17)
+    n_train, n_test, n_channels, n_times = 20, 6, 8, 384
+    shared_train = rng.normal(size=(n_train, 1, n_times))
+    shared_test = rng.normal(size=(n_test, 1, n_times))
+    channel_weights = np.linspace(1.0, 2.0, n_channels)[None, :, None]
+    x_train = (shared_train * channel_weights + 0.01 * rng.normal(
+        size=(n_train, n_channels, n_times)
+    )).astype(np.float32)
+    x_test = (shared_test * channel_weights + 0.01 * rng.normal(
+        size=(n_test, n_channels, n_times)
+    )).astype(np.float32)
+
+    result = preprocess_split(
+        x_train,
+        x_test,
+        sfreq=128.0,
+        ch_names=tuple(f"C{index}" for index in range(n_channels)),
+        seed=2026,
+        ica_policy="kurtosis",
+    )
+
+    assert result.report["ica"]["n_components"] > 1
+    assert result.x_train.shape == x_train.shape
+    assert result.x_test.shape == x_test.shape
