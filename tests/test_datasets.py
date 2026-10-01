@@ -13,6 +13,7 @@ from deepbench.config import (
     SOUZA_SUBJECTS,
 )
 from deepbench.datasets import (
+    _load_mi_mat,
     _make_moabb_dataset,
     duplicate_file_groups,
     load_souza_subject,
@@ -49,6 +50,38 @@ class FakeSouzaRaw:
     ) -> np.ndarray:
         samples = np.arange(start, stop, dtype=np.float64)
         return np.stack([samples + channel for channel in picks])
+
+
+def test_mi_openbci_loader_preserves_samples_channels_trials_axis_order(
+    tmp_path, monkeypatch
+) -> None:
+    n_samples, n_channels, n_trials = 501, 15, 4
+    source = np.arange(
+        n_samples * n_channels * n_trials, dtype=np.float32
+    ).reshape(n_samples, n_channels, n_trials)
+    data_eeg = type(
+        "FakeDataEEG",
+        (),
+        {
+            "x": source,
+            "y": np.asarray([1, 2, 1, 2]),
+            "s": 125.0,
+            "c": np.asarray([f"C{index}" for index in range(n_channels)]),
+        },
+    )()
+    wrapper = type("FakeSubject", (), {"DataEEG": data_eeg})()
+    monkeypatch.setattr(
+        "scipy.io.loadmat",
+        lambda *_args, **_kwargs: {"S02": wrapper},
+    )
+
+    trials, labels, sfreq, channels = _load_mi_mat(tmp_path / "S02.mat")
+
+    assert trials.shape == (n_trials, n_channels, n_samples)
+    assert np.array_equal(trials[2, 7], source[:, 7, 2])
+    assert labels.tolist() == [1, 2, 1, 2]
+    assert sfreq == 125.0
+    assert channels == [f"C{index}" for index in range(n_channels)]
 
 
 def test_tavakolan_is_exact_task_matched_and_multisession() -> None:
