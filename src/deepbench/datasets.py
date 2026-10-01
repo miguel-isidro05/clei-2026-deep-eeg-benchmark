@@ -96,7 +96,7 @@ def _load_mi_mat(path: Path) -> tuple[np.ndarray, np.ndarray, float, list[str]]:
     channels = [str(ch).strip() for ch in np.asarray(obj.c).reshape(-1)]
     if x.ndim != 3 or x.shape[2] != len(y):
         raise ValueError(f"Unexpected MI-OpenBCI arrays in {path}: x={x.shape}, y={y.shape}")
-    return np.transpose(x, (2, 0, 1)), y, sfreq, channels
+    return np.transpose(x, (2, 1, 0)), y, sfreq, channels
 
 
 def load_mi_openbci_subject(subject: str) -> SubjectRecording:
