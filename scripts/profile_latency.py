@@ -32,6 +32,7 @@ def main() -> None:
     parser.add_argument("--batch-sizes", nargs="+", type=int, default=[1, 64])
     parser.add_argument("--warmup", type=int, default=30)
     parser.add_argument("--iterations", type=int, default=200)
+    parser.add_argument("--windowed-transfer", action="store_true")
     parser.add_argument("--output-dir", type=Path, default=RESULTS_DIR / "latency")
     args = parser.parse_args()
     environment = latency_environment(args.device)
@@ -39,6 +40,8 @@ def main() -> None:
         "MI-OpenBCI": (15, TRIAL_SAMPLES),
         "Souza2023": (16, SOUZA_TRIAL_SAMPLES),
     }
+    if args.windowed_transfer:
+        input_shapes = {dataset: (15, 256) for dataset in input_shapes}
     rows = []
     for dataset in args.datasets:
         n_chans, n_times = input_shapes[dataset]
@@ -84,6 +87,7 @@ def main() -> None:
                 "batch_sizes": args.batch_sizes,
                 "warmup": args.warmup,
                 "iterations": args.iterations,
+                "windowed_transfer": args.windowed_transfer,
             },
         },
     )
