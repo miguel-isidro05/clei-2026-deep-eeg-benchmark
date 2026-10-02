@@ -8,6 +8,7 @@ import pytest
 
 from deepbench.config import (
     DATASET_SPECS,
+    MI_CHANNELS,
     SOUZA_CHANNELS,
     SOUZA_PUBLISHED_SUBJECTS,
     SOUZA_SUBJECTS,
@@ -15,10 +16,12 @@ from deepbench.config import (
 from deepbench.datasets import (
     _load_mi_mat,
     _make_moabb_dataset,
+    align_recording_channels,
     duplicate_file_groups,
     load_souza_subject,
     validate_dataset_dependencies,
 )
+from deepbench.types import SubjectRecording
 
 
 @dataclass
@@ -45,9 +48,7 @@ class FakeSouzaRaw:
         self.ch_names = list(SOUZA_CHANNELS)
         self.n_times = int((onsets[-1] + 4) * 125)
 
-    def get_data(
-        self, *, picks: list[int], start: int, stop: int
-    ) -> np.ndarray:
+    def get_data(self, *, picks: list[int], start: int, stop: int) -> np.ndarray:
         samples = np.arange(start, stop, dtype=np.float64)
         return np.stack([samples + channel for channel in picks])
 
@@ -56,9 +57,9 @@ def test_mi_openbci_loader_preserves_samples_channels_trials_axis_order(
     tmp_path, monkeypatch
 ) -> None:
     n_samples, n_channels, n_trials = 501, 15, 4
-    source = np.arange(
-        n_samples * n_channels * n_trials, dtype=np.float32
-    ).reshape(n_samples, n_channels, n_trials)
+    source = np.arange(n_samples * n_channels * n_trials, dtype=np.float32).reshape(
+        n_samples, n_channels, n_trials
+    )
     data_eeg = type(
         "FakeDataEEG",
         (),
@@ -146,3 +147,44 @@ def test_duplicate_file_groups_reports_identical_subject_files(tmp_path) -> None
     (tmp_path / "002.edf").write_bytes(b"unique")
 
     assert duplicate_file_groups(tmp_path, SOUZA_PUBLISHED_SUBJECTS) == [("001", "004")]
+
+
+def test_souza_transfer_alignment_uses_peterson_channel_order() -> None:
+    x = np.arange(4 * len(SOUZA_CHANNELS) * 8, dtype=np.float32).reshape(4, len(SOUZA_CHANNELS), 8)
+    recording = SubjectRecording(
+        dataset="Souza2023",
+        subject="002",
+        x=x,
+        y=np.array([0, 1, 0, 1]),
+        sessions=np.array(["run_1"] * 4),
+        sfreq=128.0,
+        ch_names=SOUZA_CHANNELS,
+        task="left_hand_vs_right_hand",
+        data_sha256="original",
+    )
+
+    aligned = align_recording_channels(recording, MI_CHANNELS)
+
+    assert aligned.ch_names == MI_CHANNELS
+    assert aligned.x.shape == (4, 15, 8)
+    for target_index, channel in enumerate(MI_CHANNELS):
+        source_index = SOUZA_CHANNELS.index(channel)
+        assert np.array_equal(aligned.x[:, target_index], x[:, source_index])
+    assert aligned.data_sha256 != recording.data_sha256
+    assert np.array_equal(recording.x, x)
+
+
+def test_transfer_alignment_rejects_missing_channel() -> None:
+    recording = SubjectRecording(
+        dataset="synthetic",
+        subject="1",
+        x=np.zeros((2, 2, 8), dtype=np.float32),
+        y=np.array([0, 1]),
+        sessions=np.array(["s", "s"]),
+        sfreq=128.0,
+        ch_names=("C3", "C4"),
+        task="binary",
+    )
+
+    with pytest.raises(ValueError, match="Missing transfer channels"):
+        align_recording_channels(recording, ("C3", "Cz", "C4"))

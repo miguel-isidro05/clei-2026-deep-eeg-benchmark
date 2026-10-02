@@ -57,6 +57,43 @@ def _recording_sha256(
     return digest.hexdigest()
 
 
+def align_recording_channels(
+    recording: SubjectRecording,
+    channels: tuple[str, ...],
+) -> SubjectRecording:
+    """Return a recording projected into an explicit common channel order."""
+    if len(set(channels)) != len(channels):
+        raise ValueError("Transfer channel order contains duplicates")
+    channel_index = {name: index for index, name in enumerate(recording.ch_names)}
+    missing = [name for name in channels if name not in channel_index]
+    if missing:
+        raise ValueError(f"Missing transfer channels in {recording.dataset}: {missing}")
+    aligned_x = np.ascontiguousarray(
+        recording.x[:, [channel_index[name] for name in channels], :],
+        dtype=np.float32,
+    )
+    aligned = SubjectRecording(
+        dataset=recording.dataset,
+        subject=recording.subject,
+        x=aligned_x,
+        y=recording.y.copy(),
+        sessions=recording.sessions.copy(),
+        sfreq=recording.sfreq,
+        ch_names=channels,
+        task=recording.task,
+        data_sha256=_recording_sha256(
+            aligned_x,
+            recording.y,
+            recording.sessions,
+            sfreq=recording.sfreq,
+            ch_names=channels,
+        ),
+        loader_bandpass_hz=recording.loader_bandpass_hz,
+    )
+    aligned.validate()
+    return aligned
+
+
 def _crop_or_pad(x: np.ndarray, target_samples: int) -> np.ndarray:
     """Center crop or edge-pad epochs to an exact temporal length."""
     n_times = x.shape[-1]
@@ -147,11 +184,7 @@ def duplicate_file_groups(data_dir: Path, subjects: tuple[str, ...]) -> list[tup
         path = data_dir / f"{subject}.edf"
         if path.exists():
             subjects_by_hash.setdefault(_file_sha256(path), []).append(subject)
-    return [
-        tuple(group)
-        for group in subjects_by_hash.values()
-        if len(group) > 1
-    ]
+    return [tuple(group) for group in subjects_by_hash.values() if len(group) > 1]
 
 
 def _validate_souza_trial_counts(y: np.ndarray, sessions: np.ndarray, subject: str) -> None:
@@ -162,15 +195,11 @@ def _validate_souza_trial_counts(y: np.ndarray, sessions: np.ndarray, subject: s
         )
     expected_sessions = {f"run_{index}" for index in range(1, 5)}
     if set(sessions) != expected_sessions:
-        raise ValueError(
-            f"Souza2023/{subject} must contain four runs; got {sorted(set(sessions))}"
-        )
+        raise ValueError(f"Souza2023/{subject} must contain four runs; got {sorted(set(sessions))}")
     for session in sorted(expected_sessions):
         session_y = y[sessions == session]
         if len(session_y) != 40 or np.bincount(session_y, minlength=2).tolist() != [20, 20]:
-            raise ValueError(
-                f"Souza2023/{subject}/{session} must contain 40 trials balanced 20/20"
-            )
+            raise ValueError(f"Souza2023/{subject}/{session} must contain 40 trials balanced 20/20")
 
 
 def load_souza_subject(subject: str) -> SubjectRecording:
@@ -235,9 +264,7 @@ def load_souza_subject(subject: str) -> SubjectRecording:
         sfreq=TARGET_SFREQ,
         ch_names=SOUZA_CHANNELS,
         task=DATASET_SPECS["Souza2023"].task,
-        data_sha256=_recording_sha256(
-            x, y, sessions, sfreq=TARGET_SFREQ, ch_names=SOUZA_CHANNELS
-        ),
+        data_sha256=_recording_sha256(x, y, sessions, sfreq=TARGET_SFREQ, ch_names=SOUZA_CHANNELS),
         loader_bandpass_hz=None,
     )
     recording.validate()

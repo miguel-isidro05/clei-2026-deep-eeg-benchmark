@@ -52,7 +52,7 @@ def _apply_train_fitted_ica(
     train_epochs = mne.EpochsArray(np.asarray(x_train, np.float64), info, verbose="ERROR")
     test_epochs = mne.EpochsArray(np.asarray(x_test, np.float64), info, verbose="ERROR")
     ica = ICA(
-        n_components=None,
+        n_components=min(x_train.shape[1], len(ch_names)),
         method="fastica",
         random_state=seed,
         max_iter="auto",
@@ -88,7 +88,7 @@ def _apply_train_fitted_ica(
         "n_iterations": int(ica.n_iter_),
         "failure_policy": "raise_and_do_not_write_cell",
         "n_components": int(ica.n_components_),
-        "n_components_parameter": None,
+        "n_components_parameter": int(min(x_train.shape[1], len(ch_names))),
         "pca_nonzero_variance_threshold": 0.999999,
         "kurtosis_threshold": float(kurtosis_threshold),
         "max_excluded": int(max_excluded),
@@ -176,6 +176,23 @@ def center_crop(x: np.ndarray, samples: int = AUGMENT_WINDOW_SAMPLES) -> np.ndar
     return np.ascontiguousarray(x[..., start : start + samples], dtype=np.float32)
 
 
+def _window_starts(n_times: int, condition: str) -> tuple[int, ...]:
+    """Return deterministic window starts for one trial-level condition."""
+    if AUGMENT_WINDOW_SAMPLES > n_times:
+        raise ValueError("Augmentation window exceeds trial length")
+    if condition == "nonoverlap":
+        return (0, n_times - AUGMENT_WINDOW_SAMPLES)
+    if condition == "overlap":
+        max_start = n_times - AUGMENT_WINDOW_SAMPLES
+        fixed_stride_starts = tuple(range(0, max_start + 1, AUGMENT_OVERLAP_STEP))
+        return (
+            fixed_stride_starts
+            if len(fixed_stride_starts) == 6
+            else tuple(np.linspace(0, max_start, 6, dtype=int))
+        )
+    raise ValueError(f"Unsupported window condition: {condition}")
+
+
 def augment_training(x: np.ndarray, y: np.ndarray, condition: str) -> tuple[np.ndarray, np.ndarray]:
     """Apply a model-independent training condition with no cross-trial mixing."""
     if condition == "full":
@@ -187,20 +204,7 @@ def augment_training(x: np.ndarray, y: np.ndarray, condition: str) -> tuple[np.n
             np.repeat(cropped, repetitions, axis=0).astype(np.float32, copy=False),
             np.repeat(np.asarray(y, dtype=np.int64), repetitions),
         )
-    if AUGMENT_WINDOW_SAMPLES > x.shape[-1]:
-        raise ValueError("Augmentation window exceeds trial length")
-    if condition == "nonoverlap":
-        starts = (0, x.shape[-1] - AUGMENT_WINDOW_SAMPLES)
-    elif condition == "overlap":
-        max_start = x.shape[-1] - AUGMENT_WINDOW_SAMPLES
-        fixed_stride_starts = tuple(range(0, max_start + 1, AUGMENT_OVERLAP_STEP))
-        starts = (
-            fixed_stride_starts
-            if len(fixed_stride_starts) == 6
-            else tuple(np.linspace(0, max_start, 6, dtype=int))
-        )
-    else:
-        raise ValueError(f"Unsupported condition: {condition}")
+    starts = _window_starts(x.shape[-1], condition)
     windows = [trial[:, start : start + AUGMENT_WINDOW_SAMPLES] for trial in x for start in starts]
     labels = np.repeat(np.asarray(y, dtype=np.int64), len(starts))
     return np.ascontiguousarray(windows, dtype=np.float32), labels
@@ -213,3 +217,45 @@ def prepare_test_input(x: np.ndarray, condition: str) -> np.ndarray:
     if condition in {"center", "center_x2", "center_x6", "nonoverlap", "overlap"}:
         return center_crop(x)
     raise ValueError(f"Unsupported condition: {condition}")
+
+
+def prepare_test_windows(x: np.ndarray, condition: str) -> tuple[np.ndarray, np.ndarray]:
+    """Expand test trials while retaining the index needed for trial-level voting."""
+    trials = np.ascontiguousarray(x, dtype=np.float32)
+    if condition == "full":
+        return trials, np.arange(len(trials), dtype=np.int64)
+    if condition == "center":
+        return center_crop(trials), np.arange(len(trials), dtype=np.int64)
+    if condition in {"center_x2", "center_x6"}:
+        repetitions = {"center_x2": 2, "center_x6": 6}[condition]
+        cropped = center_crop(trials)
+        return (
+            np.repeat(cropped, repetitions, axis=0).astype(np.float32, copy=False),
+            np.repeat(np.arange(len(trials), dtype=np.int64), repetitions),
+        )
+    starts = _window_starts(trials.shape[-1], condition)
+    windows = [
+        trial[:, start : start + AUGMENT_WINDOW_SAMPLES] for trial in trials for start in starts
+    ]
+    trial_indices = np.repeat(np.arange(len(trials), dtype=np.int64), len(starts))
+    return np.ascontiguousarray(windows, dtype=np.float32), trial_indices
+
+
+def aggregate_trial_probabilities(
+    probabilities: np.ndarray,
+    trial_indices: np.ndarray,
+    *,
+    n_trials: int,
+) -> np.ndarray:
+    """Average window probabilities into one score for each original trial."""
+    values = np.asarray(probabilities, dtype=float).reshape(-1)
+    indices = np.asarray(trial_indices, dtype=np.int64).reshape(-1)
+    if len(values) != len(indices):
+        raise ValueError("Window probabilities and trial indices must have equal length")
+    if n_trials < 1 or np.any(indices < 0) or np.any(indices >= n_trials):
+        raise ValueError("Trial indices fall outside the declared trial count")
+    counts = np.bincount(indices, minlength=n_trials)
+    if np.any(counts == 0):
+        raise ValueError("Every trial must contribute at least one window probability")
+    totals = np.bincount(indices, weights=values, minlength=n_trials)
+    return totals / counts

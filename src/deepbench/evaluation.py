@@ -13,7 +13,12 @@ from .config import SPLIT_SEED
 from .io import read_json, write_json_atomic
 from .metrics import compute_metrics
 from .models import make_classifier, predict_scores, recipe_dict
-from .preprocessing import augment_training, prepare_test_input, preprocess_split
+from .preprocessing import (
+    aggregate_trial_probabilities,
+    augment_training,
+    prepare_test_windows,
+    preprocess_split,
+)
 from .types import CellResult, SubjectRecording
 
 
@@ -32,6 +37,26 @@ def _array_hash(array: np.ndarray) -> str:
 
 def _class_counts(labels: np.ndarray) -> dict[str, int]:
     return {str(label): int(np.sum(labels == label)) for label in (0, 1)}
+
+
+def _predict_trial_scores(
+    classifier,
+    x: np.ndarray,
+    condition: str,
+) -> tuple[np.ndarray, np.ndarray, int]:
+    """Predict windows and return one averaged probability per original trial."""
+    windows, trial_indices = prepare_test_windows(x, condition)
+    _, window_scores = predict_scores(classifier, windows)
+    trial_scores = aggregate_trial_probabilities(
+        window_scores,
+        trial_indices,
+        n_trials=len(x),
+    )
+    counts = np.bincount(trial_indices, minlength=len(x))
+    if len(set(counts.tolist())) != 1:
+        raise RuntimeError("Every test trial must contribute the same number of windows")
+    trial_predictions = (trial_scores >= 0.5).astype(np.int64)
+    return trial_predictions, trial_scores, int(counts[0])
 
 
 def _protocol_splits(
@@ -133,7 +158,7 @@ def _fit_fold(
         loader_bandpass_hz=recording.loader_bandpass_hz,
     )
     x_train, y_train = augment_training(processed.x_train, recording.y[train_indices], condition)
-    x_test = prepare_test_input(processed.x_test, condition)
+    x_test_windows, _ = prepare_test_windows(processed.x_test, condition)
     classifier = make_classifier(
         model,
         n_chans=x_train.shape[1],
@@ -149,7 +174,11 @@ def _fit_fold(
     losses = np.asarray([row["train_loss"] for row in classifier.history], dtype=float)
     if not np.isfinite(losses).all():
         raise RuntimeError("Training produced a non-finite loss")
-    y_pred, y_score = predict_scores(classifier, x_test)
+    y_pred, y_score, test_windows_per_trial = _predict_trial_scores(
+        classifier,
+        processed.x_test,
+        condition,
+    )
     training_history = [
         {
             "epoch": int(index + 1),
@@ -178,10 +207,13 @@ def _fit_fold(
         "train_index_sha256": _index_hash(train_indices),
         "test_index_sha256": _index_hash(test_indices),
         "model_train_input_sha256": _array_hash(x_train),
-        "model_test_input_sha256": _array_hash(x_test),
+        "model_test_input_sha256": _array_hash(x_test_windows),
         "n_train_trials": int(len(train_indices)),
         "n_train_examples": int(len(x_train)),
         "n_test_trials": int(len(test_indices)),
+        "n_test_windows": int(len(x_test_windows)),
+        "test_windows_per_trial": test_windows_per_trial,
+        "test_aggregation": "mean_class_1_probability_by_trial",
         "train_class_counts": _class_counts(recording.y[train_indices]),
         "test_class_counts": _class_counts(recording.y[test_indices]),
         "training_history": training_history,

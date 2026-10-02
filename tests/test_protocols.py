@@ -80,3 +80,20 @@ def test_optimization_seed_does_not_change_split_or_ica_seed(monkeypatch) -> Non
         assert np.array_equal(call_a[1], call_b[1])
         assert call_a[3] == call_b[3]
         assert call_a[2] != call_b[2]
+
+
+def test_window_predictions_are_aggregated_once_per_trial(monkeypatch) -> None:
+    probabilities = np.array([0.2] * 6 + [0.8] * 6)
+
+    def fake_predict_scores(_classifier, windows):
+        assert windows.shape == (12, 3, 256)
+        return (probabilities >= 0.5).astype(np.int64), probabilities
+
+    monkeypatch.setattr(evaluation, "predict_scores", fake_predict_scores)
+    x = np.zeros((2, 3, 512), dtype=np.float32)
+
+    predictions, scores, n_windows = evaluation._predict_trial_scores(object(), x, "overlap")
+
+    assert predictions.tolist() == [0, 1]
+    assert np.allclose(scores, [0.2, 0.8])
+    assert n_windows == 6
