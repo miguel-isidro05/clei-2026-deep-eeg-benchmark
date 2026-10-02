@@ -8,6 +8,7 @@ from pathlib import Path
 
 from deepbench.config import MODEL_NAMES, PAPER_SEEDS, SOUZA_SUBJECTS
 from deepbench.io import read_json
+from deepbench.runner import _code_fingerprint
 from deepbench.transfer import TRANSFER_ARMS
 from deepbench.transfer_runner import (
     load_source_checkpoint,
@@ -97,6 +98,7 @@ def main() -> None:
                     "arm": arm,
                     "protocol": protocol,
                     "condition": "overlap",
+                    "scientific_code_sha256": _code_fingerprint(),
                 }
                 mismatched = [key for key, value in expected.items() if previous.get(key) != value]
                 if mismatched:

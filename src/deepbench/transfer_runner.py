@@ -279,6 +279,7 @@ def load_source_checkpoint(path: Path, *, model: str, seed: int) -> dict[str, to
         "channels": list(MI_CHANNELS),
         "n_times": 256,
         "sfreq": 128.0,
+        "scientific_code_sha256": _code_fingerprint(),
     }
     mismatched = [key for key, value in required.items() if manifest.get(key) != value]
     state = payload.get("state_dict")
