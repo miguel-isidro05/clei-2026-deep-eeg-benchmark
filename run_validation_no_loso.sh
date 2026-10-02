@@ -22,7 +22,7 @@ trap 'finish_report "$?"' EXIT
 
 echo "validation_started_utc=${RUN_STAMP}"
 echo "git_revision=$(git rev-parse HEAD)"
-echo "validation_role=diagnostic_not_confirmatory"
+echo "validation_role=complete_predeclared_no_loso_scope"
 echo "validation_scope=both_datasets_all_blocks_except_loso"
 
 python -u scripts/preflight.py --require-cuda --min-cuda-devices 1 \
@@ -37,8 +37,8 @@ python -u scripts/check_low_cost_csp.py --dataset Souza2023 \
 python -u scripts/run_paper.py --phase no-loso \
   --device "${VALIDATION_DEVICE}" --output-dir "${RESULTS_ROOT}"
 
-python -u scripts/run_statistics.py \
-  --results-dir "${RESULTS_ROOT}" --allow-incomplete
+python -u scripts/run_statistics.py --results-dir "${RESULTS_ROOT}"
+python -u scripts/generate_figures.py --results-dir "${RESULTS_ROOT}"
 python -u scripts/profile_latency.py \
   --device "${VALIDATION_DEVICE}" --output-dir "${RESULTS_ROOT}/latency"
 echo "validation_completed_utc=$(date -u +%Y%m%dT%H%M%SZ)"

@@ -36,3 +36,5 @@ def test_validation_run_uses_one_gpu_and_runs_both_datasets_without_loso() -> No
     assert "VALIDATION_SCOPE" not in runner
     assert "VALIDATION_SEED" not in runner
     assert "results_validation_no_loso_v7" in runner
+    assert "--allow-incomplete" not in runner
+    assert "scripts/generate_figures.py" in runner

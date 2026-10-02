@@ -214,6 +214,12 @@ def test_incomplete_seed_grid_blocks_inferential_outputs(tmp_path) -> None:
     assert (exploratory / "INCOMPLETE_EXPLORATORY_ONLY.txt").exists()
     assert not (exploratory / "paired_wilcoxon_holm.csv").exists()
 
+    payload["seed"] = 1
+    (cells / "cell-seed-1.json").write_text(json.dumps(payload), encoding="utf-8")
+    write_statistics(cells, exploratory, (0, 1))
+    assert not (exploratory / "INCOMPLETE_EXPLORATORY_ONLY.txt").exists()
+    assert (exploratory / "paired_wilcoxon_holm.csv").exists()
+
 
 def test_missing_expected_group_forces_exploratory_outputs(tmp_path) -> None:
     import json

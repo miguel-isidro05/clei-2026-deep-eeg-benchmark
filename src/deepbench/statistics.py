@@ -430,13 +430,21 @@ def write_statistics(
         "descriptive_subject_seed_variability.csv": descriptive_table(frame),
         "sample_accounting.csv": sample_accounting_table(payloads),
     }
+    incomplete_marker = output_dir / "INCOMPLETE_EXPLORATORY_ONLY.txt"
+    inferential_names = (
+        "paired_wilcoxon_holm.csv",
+        "augmentation_wilcoxon_holm.csv",
+    )
     if incomplete:
-        (output_dir / "INCOMPLETE_EXPLORATORY_ONLY.txt").write_text(
+        incomplete_marker.write_text(
             "Seed grid incomplete. Descriptive outputs are exploratory; no inferential tables "
             "were generated.\n",
             encoding="utf-8",
         )
+        for name in inferential_names:
+            (output_dir / name).unlink(missing_ok=True)
     else:
+        incomplete_marker.unlink(missing_ok=True)
         outputs["paired_wilcoxon_holm.csv"] = paired_model_tests(frame)
         outputs["augmentation_wilcoxon_holm.csv"] = augmentation_tests(frame)
     for name, table in outputs.items():

@@ -100,6 +100,66 @@ def test_confirmatory_audit_accepts_exact_all_profile(tmp_path) -> None:
     }
 
 
+def test_confirmatory_audit_accepts_exact_no_loso_profile(tmp_path) -> None:
+    destination = cell_path(
+        tmp_path,
+        "MI-OpenBCI",
+        "within_split",
+        "full",
+        "EEGNet",
+        0,
+        "S02",
+        "none",
+    )
+    expected = str(destination.relative_to(tmp_path))
+    _write_manifest(
+        tmp_path,
+        "paper-expected-no-loso-shard0-of-1.json",
+        "no-loso",
+        [expected],
+    )
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    destination.write_text(
+        json.dumps(
+            {
+                "dataset": "MI-OpenBCI",
+                "protocol": "within_split",
+                "condition": "full",
+                "ica_policy": "none",
+                "model": "EEGNet",
+                "subject": "S02",
+                "seed": 0,
+                "run_configuration": {
+                    "dataset": "MI-OpenBCI",
+                    "protocol": "within_split",
+                    "condition": "full",
+                    "ica_policy": "none",
+                    "model": "EEGNet",
+                    "subject": "S02",
+                    "seed": 0,
+                    "epochs": 300,
+                    "code_sha256": _code_fingerprint(),
+                    "recipe": paper_profile_metadata("no-loso")["recipes"]["EEGNet"],
+                },
+                "fold_reports": [
+                    {"training_history": [{"epoch": epoch} for epoch in range(1, 301)]}
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    audit, confirmatory, issues = audit_expected_cells(tmp_path)
+
+    assert confirmatory is True
+    assert issues == []
+    assert audit.iloc[0].to_dict() == {
+        "cell": expected,
+        "expected": True,
+        "present": True,
+    }
+
+
 def test_confirmatory_audit_rejects_non_frozen_epoch_count(tmp_path) -> None:
     destination = cell_path(
         tmp_path, "MI-OpenBCI", "within_split", "full", "EEGNet", 0, "S02", "none"
