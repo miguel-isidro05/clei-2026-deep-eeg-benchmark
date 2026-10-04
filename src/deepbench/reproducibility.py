@@ -17,10 +17,13 @@ import torch
 def configure_determinism() -> None:
     """Request deterministic Torch kernels before model construction."""
     os.environ.setdefault("CUBLAS_WORKSPACE_CONFIG", ":4096:8")
-    torch.use_deterministic_algorithms(True, warn_only=True)
+    torch.use_deterministic_algorithms(True, warn_only=False)
     if torch.cuda.is_available():
         torch.backends.cudnn.deterministic = True
         torch.backends.cudnn.benchmark = False
+        torch.backends.cuda.enable_flash_sdp(False)
+        torch.backends.cuda.enable_mem_efficient_sdp(False)
+        torch.backends.cuda.enable_math_sdp(True)
 
 
 def set_seeds(seed: int) -> None:
@@ -76,7 +79,7 @@ def write_manifest(path: Path, *, config: dict[str, object], root: Path) -> None
         "cuda_available": torch.cuda.is_available(),
         "cuda_version": torch.version.cuda,
         "deterministic_algorithms_enabled": torch.are_deterministic_algorithms_enabled(),
-        "deterministic_policy": "torch_deterministic_warn_only_cudnn_deterministic",
+        "deterministic_policy": "torch_deterministic_strict_math_sdp_cudnn_deterministic",
         "requested_device": config.get("device"),
         "auto_detected_device": get_device(),
         "packages": versions,

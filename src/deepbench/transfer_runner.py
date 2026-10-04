@@ -16,15 +16,16 @@ from .datasets import align_recording_channels, load_subject
 from .evaluation import _index_hash, _protocol_splits
 from .io import write_json_atomic
 from .metrics import compute_metrics
-from .models import TRAINING_RECIPES, make_module
+from .models import TRAINING_RECIPES, make_module, recipe_dict
 from .preprocessing import (
+    _window_starts,
     aggregate_trial_probabilities,
     augment_training,
     prepare_test_windows,
     preprocess_split,
 )
 from .reproducibility import set_seeds
-from .runner import _code_fingerprint, _git_revision
+from .runner import _code_fingerprint, _environment_identity, _git_revision
 from .transfer import (
     inner_validation_split,
     make_target_module,
@@ -32,6 +33,7 @@ from .transfer import (
     source_validation_subject,
     trainable_parameter_names,
 )
+from .transfer_profile import TRANSFER_PROFILE_VERSION
 
 
 def _state_sha256(state: dict[str, torch.Tensor]) -> str:
@@ -45,6 +47,12 @@ def _state_sha256(state: dict[str, torch.Tensor]) -> str:
 def _forward_logits(module: torch.nn.Module, inputs: torch.Tensor) -> torch.Tensor:
     output = module(inputs)
     return output[0] if isinstance(output, tuple) else output
+
+
+def _make_seeded_source_module(model: str, seed: int) -> torch.nn.Module:
+    """Construct a source model only after fixing every initialization RNG."""
+    set_seeds(seed)
+    return make_module(model, n_chans=15, n_outputs=2, n_times=256, sfreq=128.0)
 
 
 def _optimizer(module: torch.nn.Module, model: str, arm: str) -> torch.optim.Optimizer:
@@ -95,6 +103,7 @@ def select_epoch(
     validation_y = torch.from_numpy(np.asarray(y_validation, dtype=np.int64)).to(device)
     best_loss = float("inf")
     best_epoch = 1
+    best_state: dict[str, torch.Tensor] | None = None
     stale = 0
     history: list[dict[str, float]] = []
     for epoch in range(1, max_epochs + 1):
@@ -122,11 +131,18 @@ def select_epoch(
         if validation_loss < best_loss - threshold:
             best_loss = validation_loss
             best_epoch = epoch
+            best_state = {
+                name: value.detach().cpu().clone()
+                for name, value in module.state_dict().items()
+            }
             stale = 0
         else:
             stale += 1
         if epoch >= min_epochs and stale >= patience:
             break
+    if best_state is None:
+        raise RuntimeError("Epoch selection completed without a checkpoint")
+    module.load_state_dict(best_state)
     return best_epoch, history
 
 
@@ -209,7 +225,7 @@ def pretrain_peterson_source(
     )
     x_train, y_train = augment_training(selected.x_train, y_train_raw, "overlap")
     x_validation, y_validation = augment_training(selected.x_test, y_validation_raw, "overlap")
-    candidate = make_module(model, n_chans=15, n_outputs=2, n_times=256, sfreq=128.0)
+    candidate = _make_seeded_source_module(model, seed)
     best_epoch, history = select_epoch(
         candidate,
         model,
@@ -224,6 +240,12 @@ def pretrain_peterson_source(
         min_epochs=min_epochs,
         patience=patience,
     )
+    validation_prediction, validation_score = _predict_trials(
+        candidate, selected.x_test, device
+    )
+    validation_metrics = compute_metrics(
+        y_validation_raw, validation_prediction, validation_score
+    )
     x_all_raw = np.concatenate([x_train_raw, x_validation_raw])
     y_all_raw = np.concatenate([y_train_raw, y_validation_raw])
     refit_processed = preprocess_split(
@@ -235,14 +257,15 @@ def pretrain_peterson_source(
         ica_policy="none",
     )
     x_all, y_all = augment_training(refit_processed.x_train, y_all_raw, "overlap")
-    refit = make_module(model, n_chans=15, n_outputs=2, n_times=256, sfreq=128.0)
+    refit = _make_seeded_source_module(model, seed)
     fit_fixed_epochs(
         refit, model, "scratch", x_all, y_all, device=device, seed=seed, epochs=best_epoch
     )
     state = {name: value.detach().cpu() for name, value in refit.state_dict().items()}
+    environment_sha256, environment_versions = _environment_identity()
     manifest = {
         "schema_version": 1,
-        "profile": "clei2026-peterson-souza-transfer-v8",
+        "profile": TRANSFER_PROFILE_VERSION,
         "dataset": "MI-OpenBCI",
         "task": "motor_imagery_vs_rest",
         "model": model,
@@ -251,13 +274,23 @@ def pretrain_peterson_source(
         "channels": list(MI_CHANNELS),
         "n_times": 256,
         "sfreq": 128.0,
+        "window_policy": {
+            "name": "six_overlap_complete_trial",
+            "window_samples": 256,
+            "source_trial_samples": int(x_train_raw.shape[-1]),
+            "starts": list(_window_starts(int(x_train_raw.shape[-1]), "overlap")),
+        },
         "validation_subject": validation_subject,
         "train_subjects": train_subjects,
         "selected_epoch": best_epoch,
+        "recipe": recipe_dict(model, best_epoch),
         "history": history,
+        "source_validation_metrics": validation_metrics,
         "data_sha256": {subject: recordings[subject].data_sha256 for subject in MI_SUBJECTS},
         "scientific_code_sha256": _code_fingerprint(),
         "git_revision": _git_revision(),
+        "environment_sha256": environment_sha256,
+        "environment_versions": environment_versions,
         "state_sha256": _state_sha256(state),
     }
     destination = output_dir / "source_checkpoints" / f"source__{model}__seed{seed}.pt"
@@ -270,7 +303,7 @@ def load_source_checkpoint(path: Path, *, model: str, seed: int) -> dict[str, to
     payload = torch.load(path, map_location="cpu", weights_only=True)
     manifest = payload.get("manifest", {})
     required = {
-        "profile": "clei2026-peterson-souza-transfer-v8",
+        "profile": TRANSFER_PROFILE_VERSION,
         "dataset": "MI-OpenBCI",
         "task": "motor_imagery_vs_rest",
         "model": model,
@@ -282,6 +315,10 @@ def load_source_checkpoint(path: Path, *, model: str, seed: int) -> dict[str, to
         "scientific_code_sha256": _code_fingerprint(),
     }
     mismatched = [key for key, value in required.items() if manifest.get(key) != value]
+    if not isinstance(manifest.get("environment_sha256"), str) or len(
+        manifest["environment_sha256"]
+    ) != 64:
+        mismatched.append("environment_sha256")
     state = payload.get("state_dict")
     if (
         mismatched
@@ -323,7 +360,7 @@ def run_souza_transfer_cell(
             recording.y,
             recording.sessions,
             protocol=protocol,
-            seed=seed + fold,
+            seed=SPLIT_SEED + fold,
         )
         selected = preprocess_split(
             recording.x[inner_train],
@@ -416,9 +453,10 @@ def run_souza_transfer_cell(
     truth = np.concatenate(y_true_all)
     prediction = np.concatenate(y_pred_all)
     score = np.concatenate(y_score_all)
+    environment_sha256, environment_versions = _environment_identity()
     payload = {
         "schema_version": 1,
-        "profile": "clei2026-peterson-souza-transfer-v8",
+        "profile": TRANSFER_PROFILE_VERSION,
         "dataset": "Souza2023",
         "source_dataset": "MI-OpenBCI" if arm != "scratch" else None,
         "source_task": "motor_imagery_vs_rest" if arm != "scratch" else None,
@@ -430,11 +468,20 @@ def run_souza_transfer_cell(
         "protocol": protocol,
         "condition": "overlap",
         "channels": list(MI_CHANNELS),
+        "window_policy": {
+            "name": "six_overlap_complete_trial",
+            "window_samples": 256,
+            "source_trial_samples": int(recording.x.shape[-1]),
+            "starts": list(_window_starts(int(recording.x.shape[-1]), "overlap")),
+            "test_aggregation": "mean_class_1_probability_by_trial",
+        },
         "head_policy": "fresh_binary_head",
         "target_data_sha256": recording.data_sha256,
         "source_state_sha256": _state_sha256(source_state) if source_state is not None else None,
         "scientific_code_sha256": _code_fingerprint(),
         "git_revision": _git_revision(),
+        "environment_sha256": environment_sha256,
+        "environment_versions": environment_versions,
         "metrics": compute_metrics(truth, prediction, score),
         "y_true": truth.tolist(),
         "y_pred": prediction.tolist(),

@@ -11,7 +11,7 @@ import scipy.signal
 import scipy.stats
 from sklearn.exceptions import ConvergenceWarning
 
-from .config import AUGMENT_OVERLAP_STEP, AUGMENT_WINDOW_SAMPLES
+from .config import AUGMENT_WINDOW_SAMPLES
 
 
 @dataclass(frozen=True)
@@ -184,12 +184,7 @@ def _window_starts(n_times: int, condition: str) -> tuple[int, ...]:
         return (0, n_times - AUGMENT_WINDOW_SAMPLES)
     if condition == "overlap":
         max_start = n_times - AUGMENT_WINDOW_SAMPLES
-        fixed_stride_starts = tuple(range(0, max_start + 1, AUGMENT_OVERLAP_STEP))
-        return (
-            fixed_stride_starts
-            if len(fixed_stride_starts) == 6
-            else tuple(np.linspace(0, max_start, 6, dtype=int))
-        )
+        return tuple(np.linspace(0, max_start, 6, dtype=int))
     raise ValueError(f"Unsupported window condition: {condition}")
 
 

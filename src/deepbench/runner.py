@@ -37,8 +37,12 @@ SCIENTIFIC_PACKAGES = (
 @lru_cache(maxsize=1)
 def _code_fingerprint() -> str:
     digest = hashlib.sha256()
-    for path in sorted(Path(__file__).resolve().parent.glob("*.py")):
-        digest.update(path.name.encode())
+    root = Path(__file__).resolve().parents[2]
+    paths = list((root / "src" / "deepbench").glob("*.py"))
+    paths += list((root / "scripts").glob("*.py"))
+    paths += [root / "run_transfer_cayetano.sh"]
+    for path in sorted(path for path in paths if path.exists()):
+        digest.update(str(path.relative_to(root)).encode())
         digest.update(path.read_bytes())
     return digest.hexdigest()
 
@@ -129,7 +133,7 @@ def _run_identity(
         "device": device,
         "device_type": device.split(":", maxsplit=1)[0],
         "hardware": _hardware_identity(device),
-        "deterministic_policy": "torch_deterministic_warn_only_cudnn_deterministic",
+        "deterministic_policy": "torch_deterministic_strict_math_sdp_cudnn_deterministic",
         "environment_sha256": environment_sha256,
         "environment_versions": environment_versions,
         "data_sha256": data_sha256,

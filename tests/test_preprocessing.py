@@ -3,12 +3,27 @@ from __future__ import annotations
 import numpy as np
 
 from deepbench.preprocessing import (
+    _window_starts,
     aggregate_trial_probabilities,
     augment_training,
     prepare_test_input,
     prepare_test_windows,
     preprocess_split,
 )
+
+
+def test_overlap_windows_span_the_complete_peterson_trial() -> None:
+    starts = _window_starts(512, "overlap")
+
+    assert starts == (0, 51, 102, 153, 204, 256)
+    assert starts[-1] + 256 == 512
+
+
+def test_overlap_windows_span_the_complete_souza_trial() -> None:
+    starts = _window_starts(384, "overlap")
+
+    assert starts == (0, 25, 51, 76, 102, 128)
+    assert starts[-1] + 256 == 384
 
 
 def test_training_augmentation_preserves_trial_labels() -> None:

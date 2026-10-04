@@ -20,12 +20,20 @@ def main() -> None:
     for subject in MI_SUBJECTS:
         recording = load_subject("MI-OpenBCI", subject)
         payload["peterson"][subject] = peterson_mi_rest_change(
-            recording.x, recording.y, recording.ch_names, recording.sfreq
+            recording.x,
+            recording.y,
+            recording.ch_names,
+            recording.sfreq,
+            recording.sessions,
         )
     for subject in SOUZA_SUBJECTS:
         recording = load_subject("Souza2023", subject)
         payload["souza"][subject] = souza_lateralization(
-            recording.x, recording.y, recording.ch_names, recording.sfreq
+            recording.x,
+            recording.y,
+            recording.ch_names,
+            recording.sfreq,
+            recording.sessions,
         )
     write_json_atomic(args.output_dir / "quality" / "erd_ers.json", payload)
     print("erd_ers=OK", flush=True)

@@ -1,11 +1,11 @@
-"""Frozen v8 Peterson primary and Peterson-to-Souza transfer scope."""
+"""Frozen repaired Peterson primary and Peterson-to-Souza transfer scope."""
 
 from __future__ import annotations
 
 from .config import MI_SUBJECTS, MODEL_NAMES, PAPER_SEEDS, SOUZA_SUBJECTS
 from .transfer import TRANSFER_ARMS
 
-TRANSFER_PROFILE_VERSION = "clei2026-peterson-souza-transfer-v8"
+TRANSFER_PROFILE_VERSION = "clei2026-peterson-souza-transfer-v9-repair"
 
 
 def expected_source_checkpoints() -> list[str]:

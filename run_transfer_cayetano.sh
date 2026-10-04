@@ -1,7 +1,13 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
-OUTPUT_DIR="${TRANSFER_OUTPUT_DIR:-results_transfer_v8}"
+if [[ -n "$(git status --porcelain --untracked-files=normal -- src scripts run_transfer_cayetano.sh)" ]]; then
+  echo "Refusing transfer run with uncommitted scientific or launcher code." >&2
+  exit 2
+fi
+
+export CUBLAS_WORKSPACE_CONFIG="${CUBLAS_WORKSPACE_CONFIG:-:4096:8}"
+OUTPUT_DIR="${TRANSFER_OUTPUT_DIR:-results_transfer_v9_repair}"
 mkdir -p "$OUTPUT_DIR/logs"
 STAMP="$(date -u +%Y%m%dT%H%M%SZ)"
 LOG="$OUTPUT_DIR/logs/transfer-$STAMP.log"

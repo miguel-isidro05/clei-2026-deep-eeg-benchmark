@@ -10,6 +10,7 @@ from deepbench.config import MODEL_NAMES, PAPER_SEEDS, SOUZA_SUBJECTS
 from deepbench.io import read_json
 from deepbench.runner import _code_fingerprint
 from deepbench.transfer import TRANSFER_ARMS
+from deepbench.transfer_profile import TRANSFER_PROFILE_VERSION
 from deepbench.transfer_runner import (
     load_source_checkpoint,
     pretrain_peterson_source,
@@ -91,7 +92,7 @@ def main() -> None:
             if destination.exists():
                 previous = read_json(destination)
                 expected = {
-                    "profile": "clei2026-peterson-souza-transfer-v8",
+                    "profile": TRANSFER_PROFILE_VERSION,
                     "subject": subject,
                     "model": model,
                     "seed": seed,
