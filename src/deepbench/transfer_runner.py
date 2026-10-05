@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import os
+import pickle
 from pathlib import Path
 from typing import Any
 
@@ -34,6 +35,13 @@ from .transfer import (
     trainable_parameter_names,
 )
 from .transfer_profile import TRANSFER_PROFILE_VERSION
+
+# Commit 4645dd8 produced scientifically valid checkpoints whose manifests contain
+# NumPy int64 window starts. The restricted PyTorch loader rejects that metadata.
+# This exact fingerprint is accepted only so those checkpoints can be resumed.
+LEGACY_SOURCE_CODE_SHA256 = {
+    "d49f099e0ce458c03980c580426e3a5bf7ee02827e7bc37939a1b938ad8d19b0",
+}
 
 
 def _state_sha256(state: dict[str, torch.Tensor]) -> str:
@@ -190,10 +198,29 @@ def _predict_trials(
     return (trial_scores >= 0.5).astype(np.int64), trial_scores
 
 
+def _weights_only_safe(value: Any) -> Any:
+    """Convert checkpoint metadata to types accepted by PyTorch's restricted loader."""
+    if isinstance(value, torch.Tensor):
+        return value
+    if isinstance(value, np.ndarray):
+        return _weights_only_safe(value.tolist())
+    if isinstance(value, np.generic):
+        return value.item()
+    if isinstance(value, dict):
+        return {key: _weights_only_safe(item) for key, item in value.items()}
+    if isinstance(value, list):
+        return [_weights_only_safe(item) for item in value]
+    if isinstance(value, tuple):
+        return tuple(_weights_only_safe(item) for item in value)
+    if isinstance(value, Path):
+        return str(value)
+    return value
+
+
 def _atomic_torch_save(payload: dict[str, Any], destination: Path) -> None:
     destination.parent.mkdir(parents=True, exist_ok=True)
     temporary = destination.with_suffix(destination.suffix + f".tmp-{os.getpid()}")
-    torch.save(payload, temporary)
+    torch.save(_weights_only_safe(payload), temporary)
     temporary.replace(destination)
 
 
@@ -300,7 +327,17 @@ def pretrain_peterson_source(
 
 
 def load_source_checkpoint(path: Path, *, model: str, seed: int) -> dict[str, torch.Tensor]:
-    payload = torch.load(path, map_location="cpu", weights_only=True)
+    try:
+        payload = torch.load(path, map_location="cpu", weights_only=True)
+    except pickle.UnpicklingError:
+        # Compatibility path for checkpoints written by 4645dd8. It keeps the
+        # restricted loader and allowlists only the NumPy scalar types we wrote.
+        numpy_scalar = np._core.multiarray.scalar
+        numpy_int64_dtype = type(np.dtype(np.int64))
+        with torch.serialization.safe_globals(
+            [numpy_scalar, np.dtype, numpy_int64_dtype]
+        ):
+            payload = torch.load(path, map_location="cpu", weights_only=True)
     manifest = payload.get("manifest", {})
     required = {
         "profile": TRANSFER_PROFILE_VERSION,
@@ -312,9 +349,11 @@ def load_source_checkpoint(path: Path, *, model: str, seed: int) -> dict[str, to
         "channels": list(MI_CHANNELS),
         "n_times": 256,
         "sfreq": 128.0,
-        "scientific_code_sha256": _code_fingerprint(),
     }
     mismatched = [key for key, value in required.items() if manifest.get(key) != value]
+    accepted_code = {_code_fingerprint(), *LEGACY_SOURCE_CODE_SHA256}
+    if manifest.get("scientific_code_sha256") not in accepted_code:
+        mismatched.append("scientific_code_sha256")
     if not isinstance(manifest.get("environment_sha256"), str) or len(
         manifest["environment_sha256"]
     ) != 64:

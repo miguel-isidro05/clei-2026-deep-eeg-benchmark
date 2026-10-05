@@ -4,7 +4,13 @@ import numpy as np
 import torch
 
 from deepbench.transfer import inner_validation_split, source_validation_subject
-from deepbench.transfer_runner import _make_seeded_source_module
+from deepbench.transfer_profile import TRANSFER_PROFILE_VERSION
+from deepbench.transfer_runner import (
+    _atomic_torch_save,
+    _make_seeded_source_module,
+    _state_sha256,
+    load_source_checkpoint,
+)
 
 
 def test_source_validation_subject_rotates_predeclared_subjects() -> None:
@@ -87,3 +93,48 @@ def test_source_module_initialization_is_seeded() -> None:
         torch.equal(first.state_dict()[name], second.state_dict()[name])
         for name in first.state_dict()
     )
+
+
+def test_atomic_checkpoint_save_converts_numpy_scalars_for_weights_only_load(tmp_path) -> None:
+    destination = tmp_path / "source.pt"
+
+    _atomic_torch_save(
+        {
+            "state_dict": {"weight": torch.ones(1)},
+            "manifest": {"starts": [np.int64(255)]},
+        },
+        destination,
+    )
+
+    payload = torch.load(destination, map_location="cpu", weights_only=True)
+    assert payload["manifest"]["starts"] == [255]
+    assert type(payload["manifest"]["starts"][0]) is int
+
+
+def test_legacy_v9_checkpoint_with_numpy_scalar_loads_safely(tmp_path, monkeypatch) -> None:
+    from deepbench import transfer_runner
+
+    state = {"weight": torch.ones(1)}
+    legacy_fingerprint = next(iter(transfer_runner.LEGACY_SOURCE_CODE_SHA256))
+    manifest = {
+        "profile": TRANSFER_PROFILE_VERSION,
+        "dataset": "MI-OpenBCI",
+        "task": "motor_imagery_vs_rest",
+        "model": "EEGNet",
+        "seed": 0,
+        "condition": "overlap",
+        "channels": list(transfer_runner.MI_CHANNELS),
+        "n_times": 256,
+        "sfreq": 128.0,
+        "window_policy": {"starts": [np.int64(255)]},
+        "scientific_code_sha256": legacy_fingerprint,
+        "environment_sha256": "a" * 64,
+        "state_sha256": _state_sha256(state),
+    }
+    destination = tmp_path / "legacy-source.pt"
+    torch.save({"state_dict": state, "manifest": manifest}, destination)
+    monkeypatch.setattr(transfer_runner, "_code_fingerprint", lambda: "b" * 64)
+
+    loaded = load_source_checkpoint(destination, model="EEGNet", seed=0)
+
+    assert torch.equal(loaded["weight"], state["weight"])
