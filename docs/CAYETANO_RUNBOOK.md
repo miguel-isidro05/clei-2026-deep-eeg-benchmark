@@ -1,89 +1,88 @@
-# Runbook operativo para la PC de Cayetano
+# Runbook operativo para Cayetano
 
-## 1. Preparacion
+## Objetivo
 
-1. Instalar Git, Miniconda, `wget` y el driver NVIDIA. Confirmar `nvidia-smi`.
-2. Clonar el repositorio.
-3. Ejecutar `CAYETANO=1 bash setup.sh`.
-4. Activar `deep-eeg-clei`.
-5. No continuar si el instalador no termina en `setup=OK` y `preflight=OK`.
+Ejecutar el perfil Peterson-only V10. No corre Souza2023, transferencia ni datasets MOABB externos.
+El resultado esperado son 3,250 celdas y tablas estadisticas confirmatorias.
 
-El adjunto público 42 es una copia exacta del sujeto `004`; no es un sujeto `001` válido. El
-instalador lo deja en cuarentena. Souza2023 se ejecuta únicamente con `002`–`006`. No renombre ni
-duplique el archivo 004 y no cree un `001.edf`.
-
-El flujo confirmatorio usa solo MI-OpenBCI/Peterson y Souza2023. No descarga ni ejecuta datasets
-externos de MOABB.
-
-## 2. Piloto temporal separado
-
-Use otro directorio para que el piloto nunca se mezcle con el paper:
+## Preparacion
 
 ```bash
-python scripts/run_experiments.py --dataset MI-OpenBCI --subjects S02 \
-  --models EEGNet FBCNet ShallowConvNet EEGConformer EEGInceptionMI \
-  --protocols within_split --conditions full --seeds 0 --epochs 3 \
-  --ica-policy none --device cuda --output-dir results_pilot
+cd /home/imiguel/Desktop/clei-2026-deep-eeg-benchmark
+git fetch origin
+git switch feat/peterson-journal-v10
+git pull --ff-only
+
+CAYETANO=1 bash setup.sh
+conda activate deep-eeg-clei
 ```
 
-Ejecute también el piloto de Souza2023, que verifica los cinco modelos en la tarea izquierda frente
-a derecha:
+Si `setup.sh` termina bien debe mostrar `setup=OK` y `preflight=OK`.
+
+## Lanzar en tmux
 
 ```bash
-python scripts/run_experiments.py --dataset Souza2023 --subjects 002 \
-  --models EEGNet FBCNet ShallowConvNet EEGConformer EEGInceptionMI \
-  --protocols within_split cross_session --conditions full --seeds 0 --epochs 3 \
-  --ica-policy none --device cuda --output-dir results_souza_pilot
-```
+tmux new -s clei_peterson_v10
 
-Revise `nvidia-smi`, el tiempo de cada epoch en `training_history` y el espacio en disco. Multiplique
-el tiempo observado de forma conservadora antes de lanzar 300 epochs.
+cd /home/imiguel/Desktop/clei-2026-deep-eeg-benchmark
+conda activate deep-eeg-clei
 
-## 3. Corrida paper
+export CLEI_DATA_DIR='/home/imiguel/Desktop/clei-2026-deep-eeg-benchmark/data/mi-openbci'
+export PETERSON_RESULTS_DIR="results_peterson_journal_v10_$(git rev-parse --short HEAD)"
 
-La forma recomendada en la RTX A6000 doble es el script completo, porque guarda consola y resumen:
-
-```bash
 bash run_cayetano.sh
 ```
 
-El script escribe `results/logs/paper-*.log`, `results/EXPERIMENT_LOG.md`, tablas, latencia y
-figuras, y actualiza `manuscript/revision_v2/generated_results.tex`. Si prefiere ejecutar
-manualmente, use cada fase por separado dentro de `tmux`, `screen` o un job persistente:
+Para salir sin cortar la corrida: `Ctrl-b`, luego `d`.
+
+## Vigilar avance
 
 ```bash
-python scripts/run_paper.py --phase all --plan-only
-python scripts/run_paper.py --phase peterson --device cuda:0
-python scripts/run_paper.py --phase souza --device cuda:1
-python scripts/run_paper.py --phase ica-sensitivity --device cuda
+cd /home/imiguel/Desktop/clei-2026-deep-eeg-benchmark
+export PETERSON_RESULTS_DIR="results_peterson_journal_v10_$(git rev-parse --short HEAD)"
+
+pgrep -af 'run_cayetano.sh|run_peterson_journal.py'
+find "$PETERSON_RESULTS_DIR/cells" -name '*.json' | wc -l
+nvidia-smi
+tail -n 40 "$(ls -1t "$PETERSON_RESULTS_DIR"/logs/peterson-*.log | head -n 1)"
 ```
 
-Regenerar primero el manifiesto `--phase all --plan-only` garantiza que el gate use el perfil
-vigente. No edite ni recicle manualmente manifiestos de otra revisión.
+La corrida completa debe llegar a `3250/3250`. Si se corta, repita `bash run_cayetano.sh` con la
+misma `PETERSON_RESULTS_DIR`; las celdas compatibles se saltan.
 
-Puede repetir exactamente el mismo comando tras una interrupcion. Se omiten celdas compatibles y
-se recuperan folds finalizados. Si el codigo, epochs o receta cambiaron, el programa se detiene en
-vez de mezclar resultados; use una nueva carpeta o `--overwrite` conscientemente.
-
-## 4. Cierre y comprobaciones
+## Comprobar cierre
 
 ```bash
-python scripts/profile_latency.py --device cuda
-python scripts/run_statistics.py
-python scripts/generate_figures.py
-python scripts/generate_manuscript_results.py
-python scripts/write_run_report.py --status completed
-pytest
-ruff check .
+cd /home/imiguel/Desktop/clei-2026-deep-eeg-benchmark
+conda activate deep-eeg-clei
+export PETERSON_RESULTS_DIR="results_peterson_journal_v10_$(git rev-parse --short HEAD)"
+
+pgrep -af 'run_cayetano.sh|run_peterson_journal.py' || echo "procesos=ninguno"
+python scripts/check_peterson_journal.py --output-dir "$PETERSON_RESULTS_DIR"
+test -f "$PETERSON_RESULTS_DIR/statistics/paired_wilcoxon_holm.csv" && echo "statistics=OK"
+test -f "$PETERSON_RESULTS_DIR/latency/latency.json" && echo "latency=OK"
+test -f "$PETERSON_RESULTS_DIR/quality/erd_ers.json" && echo "erd_ers=OK"
+tail -n 40 "$(ls -1t "$PETERSON_RESULTS_DIR"/logs/peterson-*.log | head -n 1)"
 ```
 
-No considere lista la corrida si `run_statistics.py` devuelve error, si existe un `present=False`
-o un `expected=False` en `expected_cell_audit.csv`, o si existe un `complete=False` en
-`completeness.csv`. El análisis confirmatorio también exige el manifiesto `--phase all` o los dos
-manifiestos de fase. Conserve juntos
-`results/cells`, `results/manifests`, `results/statistics`, `results/quality`, `results/latency`,
-`results/figures`, `results/logs` y `results/EXPERIMENT_LOG.md`.
+## Exportar resultados
 
-Si la sesión se interrumpe, vuelva a ejecutar `bash run_cayetano.sh`. Las celdas y folds
-compatibles se omiten. No mezcle una carpeta `results` creada con otro commit o perfil: el
-fingerprint y el auditor la rechazarán.
+```bash
+cd /home/imiguel/Desktop/clei-2026-deep-eeg-benchmark
+export PETERSON_RESULTS_DIR="results_peterson_journal_v10_$(git rev-parse --short HEAD)"
+export EXPORT_FILE="/home/imiguel/Desktop/clei-exports/clei-peterson-v10-$(git rev-parse --short HEAD)-$(date -u +%Y%m%d).tar.gz"
+
+mkdir -p /home/imiguel/Desktop/clei-exports
+tar -czf "$EXPORT_FILE" "$PETERSON_RESULTS_DIR"
+cd /home/imiguel/Desktop/clei-exports
+sha256sum "$(basename "$EXPORT_FILE")" > "$(basename "$EXPORT_FILE").sha256"
+ls -lh "$(basename "$EXPORT_FILE")" "$(basename "$EXPORT_FILE").sha256"
+```
+
+En la Mac, desde la carpeta donde quieras recibirlo:
+
+```bash
+scp hinton_2_cayetano:/home/imiguel/Desktop/clei-exports/clei-peterson-v10-*.tar.gz .
+scp hinton_2_cayetano:/home/imiguel/Desktop/clei-exports/clei-peterson-v10-*.tar.gz.sha256 .
+shasum -a 256 -c clei-peterson-v10-*.tar.gz.sha256
+```

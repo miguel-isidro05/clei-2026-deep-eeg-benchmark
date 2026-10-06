@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from .config import PAPER_EPOCHS, PAPER_SEEDS, PETERSON_MODEL_NAMES
+from .config import PAPER_EPOCHS, PAPER_SEEDS, PETERSON_MODEL_NAMES, is_classical_model
 from .models import recipe_dict
 from .peterson_profile import expected_cell_names
 
@@ -41,7 +41,7 @@ def audit_peterson_results(results_dir: Path) -> tuple[pd.DataFrame, list[str]]:
         if model not in PETERSON_MODEL_NAMES:
             issues.append(f"{relative} has unsupported model={model!r}")
             continue
-        expected_epochs = 0 if model == "CSP+LDA" else PAPER_EPOCHS
+        expected_epochs = 0 if is_classical_model(model) else PAPER_EPOCHS
         if configuration.get("epochs") != expected_epochs:
             issues.append(f"{relative} has epochs={configuration.get('epochs')}")
         if configuration.get("code_sha256") != code_sha256:
@@ -56,7 +56,7 @@ def audit_peterson_results(results_dir: Path) -> tuple[pd.DataFrame, list[str]]:
             continue
         for fold_index, report in enumerate(reports):
             history = report.get("training_history", [])
-            if model == "CSP+LDA":
+            if is_classical_model(model):
                 if history or report.get("estimator_family") != "classical":
                     issues.append(f"{relative} fold {fold_index} has invalid CSP metadata")
             elif len(history) != PAPER_EPOCHS or history[-1].get("epoch") != PAPER_EPOCHS:

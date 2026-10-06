@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Profile all five models under identical device and input conditions."""
+"""Profile selected deep models under identical device and input conditions."""
 
 from __future__ import annotations
 

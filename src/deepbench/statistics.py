@@ -12,7 +12,7 @@ import pandas as pd
 import scipy.stats
 from statsmodels.stats.multitest import multipletests
 
-from .config import PAPER_EPOCHS
+from .config import PAPER_EPOCHS, is_classical_model
 
 CELL_KEYS = [
     "dataset",
@@ -381,7 +381,7 @@ def validate_matched_augmentation_compute(
                 int(epoch.get("train_batch_count", 0))
                 for epoch in report.get("training_history", [])
             )
-            is_classical = payload.get("model") == "CSP+LDA"
+            is_classical = is_classical_model(str(payload.get("model")))
             if strict and not is_classical and len(batches_per_epoch) != PAPER_EPOCHS:
                 raise ValueError(
                     f"Compute audit for {(*base, fold_index)} requires "

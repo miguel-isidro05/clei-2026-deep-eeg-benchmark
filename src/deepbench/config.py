@@ -24,6 +24,13 @@ PETERSON_MODEL_NAMES: tuple[str, ...] = (
     *CLASSICAL_MODEL_NAMES,
     *PETERSON_DEEP_MODEL_NAMES,
 )
+
+
+def is_classical_model(name: str) -> bool:
+    """Return whether a model uses the frozen non-neural estimator path."""
+    return name in CLASSICAL_MODEL_NAMES
+
+
 PAPER_SEEDS: tuple[int, ...] = (0, 1, 2, 3, 4)
 PAPER_EPOCHS = 300
 PAPER_PROFILE_VERSION = "clei2026-deep-v7"

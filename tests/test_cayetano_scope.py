@@ -32,6 +32,13 @@ def test_default_setup_does_not_require_souza() -> None:
     assert 'if [[ "${ENABLE_SOUZA:-0}" == "1" ]]' in setup
 
 
+def test_preflight_dataset_selection_is_not_hardwired_to_peterson() -> None:
+    preflight = (ROOT / "scripts" / "preflight.py").read_text(encoding="utf-8")
+
+    assert 'if "MI-OpenBCI" in args.datasets:' in preflight
+    assert 'if "Souza2023" in args.datasets:' in preflight
+
+
 def test_validation_run_uses_one_gpu_and_runs_both_datasets_without_loso() -> None:
     runner = (ROOT / "run_validation_no_loso.sh").read_text(encoding="utf-8")
 

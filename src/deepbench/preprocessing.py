@@ -254,3 +254,17 @@ def aggregate_trial_probabilities(
         raise ValueError("Every trial must contribute at least one window probability")
     totals = np.bincount(indices, weights=values, minlength=n_trials)
     return totals / counts
+
+
+def aggregate_window_scores(
+    probabilities: np.ndarray,
+    trial_indices: np.ndarray,
+    *,
+    n_trials: int,
+) -> tuple[np.ndarray, np.ndarray, int]:
+    """Return one thresholded score per trial and verify equal window support."""
+    scores = aggregate_trial_probabilities(probabilities, trial_indices, n_trials=n_trials)
+    counts = np.bincount(np.asarray(trial_indices, dtype=np.int64), minlength=n_trials)
+    if len(set(counts.tolist())) != 1:
+        raise RuntimeError("Every test trial must contribute the same number of windows")
+    return (scores >= 0.5).astype(np.int64), scores, int(counts[0])

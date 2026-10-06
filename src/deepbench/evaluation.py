@@ -11,12 +11,12 @@ from sklearn.model_selection import StratifiedKFold, StratifiedShuffleSplit
 
 from .classical import make_csp_lda
 from .classical import predict_trial_scores as predict_classical_trial_scores
-from .config import SPLIT_SEED
+from .config import SPLIT_SEED, is_classical_model
 from .io import read_json, write_json_atomic
 from .metrics import compute_metrics
 from .models import make_classifier, predict_scores, recipe_dict
 from .preprocessing import (
-    aggregate_trial_probabilities,
+    aggregate_window_scores,
     augment_training,
     prepare_test_windows,
     preprocess_split,
@@ -49,16 +49,7 @@ def _predict_trial_scores(
     """Predict windows and return one averaged probability per original trial."""
     windows, trial_indices = prepare_test_windows(x, condition)
     _, window_scores = predict_scores(classifier, windows)
-    trial_scores = aggregate_trial_probabilities(
-        window_scores,
-        trial_indices,
-        n_trials=len(x),
-    )
-    counts = np.bincount(trial_indices, minlength=len(x))
-    if len(set(counts.tolist())) != 1:
-        raise RuntimeError("Every test trial must contribute the same number of windows")
-    trial_predictions = (trial_scores >= 0.5).astype(np.int64)
-    return trial_predictions, trial_scores, int(counts[0])
+    return aggregate_window_scores(window_scores, trial_indices, n_trials=len(x))
 
 
 def _protocol_splits(
@@ -161,7 +152,7 @@ def _fit_fold(
     )
     x_train, y_train = augment_training(processed.x_train, recording.y[train_indices], condition)
     x_test_windows, _ = prepare_test_windows(processed.x_test, condition)
-    if model == "CSP+LDA":
+    if is_classical_model(model):
         classifier = make_csp_lda()
         classifier.fit(x_train, y_train)
         y_pred, y_score, test_windows_per_trial = predict_classical_trial_scores(
@@ -198,7 +189,7 @@ def _fit_fold(
             for index, row in enumerate(classifier.history)
             if all(key in row for key in ("train_loss", "dur", "train_batch_count", "event_lr"))
         ]
-    if checkpoint_path is not None and model != "CSP+LDA":
+    if checkpoint_path is not None and not is_classical_model(model):
         _save_checkpoint(
             classifier,
             checkpoint_path,
@@ -225,7 +216,7 @@ def _fit_fold(
         "train_class_counts": _class_counts(recording.y[train_indices]),
         "test_class_counts": _class_counts(recording.y[test_indices]),
         "training_history": training_history,
-        "estimator_family": "classical" if model == "CSP+LDA" else "deep_learning",
+        "estimator_family": "classical" if is_classical_model(model) else "deep_learning",
     }
     return recording.y[test_indices], y_pred, y_score, len(x_train), report
 

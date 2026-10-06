@@ -61,10 +61,11 @@ def main() -> None:
         "statsmodels",
     ):
         print(f"{package}={importlib.metadata.version(package)}")
-    data_dir = resolve_mi_data_dir()
-    missing = [subject for subject in MI_SUBJECTS if not (data_dir / f"{subject}.mat").exists()]
-    if missing:
-        raise SystemExit(f"Missing MI-OpenBCI files in {data_dir}: {missing}")
+    if "MI-OpenBCI" in args.datasets:
+        data_dir = resolve_mi_data_dir()
+        missing = [subject for subject in MI_SUBJECTS if not (data_dir / f"{subject}.mat").exists()]
+        if missing:
+            raise SystemExit(f"Missing MI-OpenBCI files in {data_dir}: {missing}")
     souza_subjects: list[str] = []
     missing_souza: list[str] = []
     if "Souza2023" in args.datasets:
@@ -82,7 +83,9 @@ def main() -> None:
             raise SystemExit(f"No Souza2023 EDF files found in {souza_dir}")
     quality_tables = []
     quality_metadata = []
-    local_subjects = {"MI-OpenBCI": list(MI_SUBJECTS)}
+    local_subjects: dict[str, list[str]] = {}
+    if "MI-OpenBCI" in args.datasets:
+        local_subjects["MI-OpenBCI"] = list(MI_SUBJECTS)
     if "Souza2023" in args.datasets:
         local_subjects["Souza2023"] = souza_subjects
     for dataset, subjects in local_subjects.items():
@@ -111,7 +114,9 @@ def main() -> None:
             "automatic_exclusion": False,
         },
     )
-    input_shapes = {"MI-OpenBCI": (15, TRIAL_SAMPLES)}
+    input_shapes: dict[str, tuple[int, int]] = {}
+    if "MI-OpenBCI" in args.datasets:
+        input_shapes["MI-OpenBCI"] = (15, TRIAL_SAMPLES)
     if "Souza2023" in args.datasets:
         input_shapes["Souza2023"] = (16, SOUZA_TRIAL_SAMPLES)
     for dataset, (n_chans, n_times) in input_shapes.items():

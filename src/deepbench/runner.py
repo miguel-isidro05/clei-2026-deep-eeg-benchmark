@@ -13,7 +13,7 @@ from pathlib import Path
 
 import torch
 
-from .config import RESULTS_DIR, SPLIT_SEED
+from .config import RESULTS_DIR, SPLIT_SEED, is_classical_model
 from .datasets import available_subjects, load_subject
 from .evaluation import run_loso_cell, run_subject_cell
 from .io import read_json, write_json_atomic
@@ -228,8 +228,8 @@ def run_job(
                             seed=seed,
                             subject=subject,
                             ica_policy=ica_policy,
-                            epochs=0 if model == "CSP+LDA" else epochs,
-                            device="cpu" if model == "CSP+LDA" else device,
+                            epochs=0 if is_classical_model(model) else epochs,
+                            device="cpu" if is_classical_model(model) else device,
                             save_weights=save_weights,
                             data_sha256=data_sha256,
                             environment_sha256=environment_sha256,
@@ -251,7 +251,7 @@ def run_job(
                                 subject,
                                 model,
                                 condition=condition,
-                                device="cpu" if model == "CSP+LDA" else device,
+                                device="cpu" if is_classical_model(model) else device,
                                 seed=seed,
                                 epochs=epochs,
                                 ica_policy=ica_policy,
@@ -263,7 +263,7 @@ def run_job(
                                 model,
                                 protocol=protocol,
                                 condition=condition,
-                                device="cpu" if model == "CSP+LDA" else device,
+                                device="cpu" if is_classical_model(model) else device,
                                 seed=seed,
                                 epochs=epochs,
                                 ica_policy=ica_policy,

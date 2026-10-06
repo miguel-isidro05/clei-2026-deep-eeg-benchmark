@@ -44,7 +44,7 @@ wait "${gpu1}" || failed=1
 python -u scripts/check_peterson_journal.py --output-dir "${RESULTS_ROOT}"
 python -u scripts/run_peterson_statistics.py --results-dir "${RESULTS_ROOT}"
 python -u scripts/profile_latency.py --datasets MI-OpenBCI \
-  --models FBCNet EEGNet ShallowConvNet EEGConformer --device cuda:0 \
+  --models FBCNet EEGNet ShallowConvNet EEGConformer --device cuda:0 --windowed-transfer \
   --output-dir "${RESULTS_ROOT}/latency"
 finish_report completed
 trap - ERR
