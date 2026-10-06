@@ -23,6 +23,7 @@ from deepbench.reproducibility import get_device
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--device", default=get_device())
+    parser.add_argument("--models", nargs="+", choices=MODEL_NAMES, default=list(MODEL_NAMES))
     parser.add_argument(
         "--datasets",
         nargs="+",
@@ -46,7 +47,7 @@ def main() -> None:
     for dataset in args.datasets:
         n_chans, n_times = input_shapes[dataset]
         for batch_size in args.batch_sizes:
-            for model in MODEL_NAMES:
+            for model in args.models:
                 rows.append(
                     {
                         "dataset": dataset,
@@ -83,6 +84,7 @@ def main() -> None:
             "profile": {
                 "device": args.device,
                 "datasets": args.datasets,
+                "models": args.models,
                 "input_shapes": {dataset: input_shapes[dataset] for dataset in args.datasets},
                 "batch_sizes": args.batch_sizes,
                 "warmup": args.warmup,

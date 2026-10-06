@@ -221,6 +221,45 @@ def test_incomplete_seed_grid_blocks_inferential_outputs(tmp_path) -> None:
     assert (exploratory / "paired_wilcoxon_holm.csv").exists()
 
 
+def test_accuracy_statistics_allow_model_specific_training_backends(tmp_path) -> None:
+    cells = tmp_path / "cells"
+    cells.mkdir()
+    import json
+
+    for model, epochs, device_type, hardware in (
+        ("CSP+LDA", 0, "cpu", "CPU"),
+        ("EEGNet", 300, "cuda", "GPU"),
+    ):
+        payload = {
+            "dataset": "D",
+            "task": "binary",
+            "protocol": "within_split",
+            "condition": "full",
+            "ica_policy": "none",
+            "model": model,
+            "subject": "1",
+            "seed": 0,
+            "metrics": {"accuracy": 0.5, "kappa": 0.0},
+            "run_configuration": {
+                "schema_version": 3,
+                "code_sha256": "abc",
+                "epochs": epochs,
+                "split_seed": 2026,
+                "device_type": device_type,
+                "hardware": hardware,
+                "deterministic_policy": "fixed",
+                "environment_sha256": "env-a",
+                "environment_versions": {"python": "3.11"},
+                "data_sha256": "data-a",
+                "recipe": {"estimator": model},
+            },
+        }
+        (cells / f"{model}.json").write_text(json.dumps(payload), encoding="utf-8")
+
+    loaded = load_cells(cells)
+    assert set(loaded["model"]) == {"CSP+LDA", "EEGNet"}
+
+
 def test_missing_expected_group_forces_exploratory_outputs(tmp_path) -> None:
     import json
 

@@ -9,6 +9,8 @@ import numpy as np
 import torch
 from sklearn.model_selection import StratifiedKFold, StratifiedShuffleSplit
 
+from .classical import make_csp_lda
+from .classical import predict_trial_scores as predict_classical_trial_scores
 from .config import SPLIT_SEED
 from .io import read_json, write_json_atomic
 from .metrics import compute_metrics
@@ -159,38 +161,44 @@ def _fit_fold(
     )
     x_train, y_train = augment_training(processed.x_train, recording.y[train_indices], condition)
     x_test_windows, _ = prepare_test_windows(processed.x_test, condition)
-    classifier = make_classifier(
-        model,
-        n_chans=x_train.shape[1],
-        n_times=x_train.shape[-1],
-        sfreq=recording.sfreq,
-        device=device,
-        seed=model_seed,
-        epochs=epochs,
-    )
-    classifier.fit(x_train, y_train)
-    if not classifier.history or int(classifier.history[-1, "train_batch_count"]) < 1:
-        raise RuntimeError("Training completed without processing any batches")
-    losses = np.asarray([row["train_loss"] for row in classifier.history], dtype=float)
-    if not np.isfinite(losses).all():
-        raise RuntimeError("Training produced a non-finite loss")
-    y_pred, y_score, test_windows_per_trial = _predict_trial_scores(
-        classifier,
-        processed.x_test,
-        condition,
-    )
-    training_history = [
-        {
-            "epoch": int(index + 1),
-            "train_loss": float(row["train_loss"]),
-            "duration_seconds": float(row["dur"]),
-            "train_batch_count": int(row["train_batch_count"]),
-            "learning_rate": float(row["event_lr"]),
-        }
-        for index, row in enumerate(classifier.history)
-        if all(key in row for key in ("train_loss", "dur", "train_batch_count", "event_lr"))
-    ]
-    if checkpoint_path is not None:
+    if model == "CSP+LDA":
+        classifier = make_csp_lda()
+        classifier.fit(x_train, y_train)
+        y_pred, y_score, test_windows_per_trial = predict_classical_trial_scores(
+            classifier, processed.x_test, condition
+        )
+        training_history: list[dict[str, object]] = []
+    else:
+        classifier = make_classifier(
+            model,
+            n_chans=x_train.shape[1],
+            n_times=x_train.shape[-1],
+            sfreq=recording.sfreq,
+            device=device,
+            seed=model_seed,
+            epochs=epochs,
+        )
+        classifier.fit(x_train, y_train)
+        if not classifier.history or int(classifier.history[-1, "train_batch_count"]) < 1:
+            raise RuntimeError("Training completed without processing any batches")
+        losses = np.asarray([row["train_loss"] for row in classifier.history], dtype=float)
+        if not np.isfinite(losses).all():
+            raise RuntimeError("Training produced a non-finite loss")
+        y_pred, y_score, test_windows_per_trial = _predict_trial_scores(
+            classifier, processed.x_test, condition
+        )
+        training_history = [
+            {
+                "epoch": int(index + 1),
+                "train_loss": float(row["train_loss"]),
+                "duration_seconds": float(row["dur"]),
+                "train_batch_count": int(row["train_batch_count"]),
+                "learning_rate": float(row["event_lr"]),
+            }
+            for index, row in enumerate(classifier.history)
+            if all(key in row for key in ("train_loss", "dur", "train_batch_count", "event_lr"))
+        ]
+    if checkpoint_path is not None and model != "CSP+LDA":
         _save_checkpoint(
             classifier,
             checkpoint_path,
@@ -217,6 +225,7 @@ def _fit_fold(
         "train_class_counts": _class_counts(recording.y[train_indices]),
         "test_class_counts": _class_counts(recording.y[test_indices]),
         "training_history": training_history,
+        "estimator_family": "classical" if model == "CSP+LDA" else "deep_learning",
     }
     return recording.y[test_indices], y_pred, y_score, len(x_train), report
 

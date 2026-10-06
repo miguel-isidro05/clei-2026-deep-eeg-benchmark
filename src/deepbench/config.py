@@ -13,9 +13,21 @@ MODEL_NAMES: tuple[str, ...] = (
     "EEGConformer",
     "EEGInceptionMI",
 )
+CLASSICAL_MODEL_NAMES: tuple[str, ...] = ("CSP+LDA",)
+PETERSON_DEEP_MODEL_NAMES: tuple[str, ...] = (
+    "FBCNet",
+    "EEGNet",
+    "ShallowConvNet",
+    "EEGConformer",
+)
+PETERSON_MODEL_NAMES: tuple[str, ...] = (
+    *CLASSICAL_MODEL_NAMES,
+    *PETERSON_DEEP_MODEL_NAMES,
+)
 PAPER_SEEDS: tuple[int, ...] = (0, 1, 2, 3, 4)
 PAPER_EPOCHS = 300
 PAPER_PROFILE_VERSION = "clei2026-deep-v7"
+PETERSON_PROFILE_VERSION = "clei2026-peterson-journal-v10"
 SPLIT_SEED = 2026
 TARGET_SFREQ = 128.0
 TRIAL_SECONDS = 4.0

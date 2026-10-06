@@ -13,6 +13,7 @@ from braindecode import EEGClassifier
 from braindecode.models import EEGConformer, EEGInceptionMI, EEGNet, FBCNet, ShallowFBCSPNet
 from skorch.callbacks import LRScheduler
 
+from .classical import CSP_RECIPE
 from .config import MODEL_NAMES
 from .reproducibility import set_seeds
 
@@ -138,6 +139,8 @@ def make_classifier(
 
 
 def recipe_dict(name: str, epochs: int | None = None) -> dict[str, object]:
+    if name == "CSP+LDA":
+        return dict(CSP_RECIPE)
     values = asdict(TRAINING_RECIPES[name])
     if epochs is not None:
         values["epochs"] = int(epochs)

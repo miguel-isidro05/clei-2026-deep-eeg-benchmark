@@ -30,11 +30,7 @@ MIN_PAIRED_SUBJECTS = 5
 GLOBAL_COMPATIBILITY_KEYS = (
     "schema_version",
     "code_sha256",
-    "epochs",
     "split_seed",
-    "device_type",
-    "hardware",
-    "deterministic_policy",
     "environment_sha256",
 )
 
@@ -46,7 +42,7 @@ def statistics_code_sha256() -> str:
 
 def _validate_run_configurations(payloads: list[dict[str, object]]) -> None:
     global_signatures: set[tuple[object, ...]] = set()
-    recipes_by_model: dict[str, set[str]] = {}
+    recipes_by_model: dict[str, set[tuple[object, ...]]] = {}
     data_by_subject: dict[tuple[str, str, str], set[str]] = {}
     for payload in payloads:
         configuration = payload.get("run_configuration")
@@ -61,15 +57,18 @@ def _validate_run_configurations(payloads: list[dict[str, object]]) -> None:
             raise ValueError("run_configuration is missing environment_versions")
         global_signatures.add(tuple(configuration[key] for key in GLOBAL_COMPATIBILITY_KEYS))
         model = str(payload["model"])
-        recipe = json.dumps(configuration.get("recipe"), sort_keys=True)
-        recipes_by_model.setdefault(model, set()).add(recipe)
+        model_signature = (
+            configuration.get("epochs"),
+            configuration.get("device_type"),
+            configuration.get("hardware"),
+            configuration.get("deterministic_policy"),
+            json.dumps(configuration.get("recipe"), sort_keys=True),
+        )
+        recipes_by_model.setdefault(model, set()).add(model_signature)
         data_key = (str(payload["dataset"]), str(payload["protocol"]), str(payload["subject"]))
         data_by_subject.setdefault(data_key, set()).add(str(configuration.get("data_sha256")))
     if len(global_signatures) != 1:
-        raise ValueError(
-            "Incompatible result cells: code, epochs, split seed, hardware, device type, or "
-            "deterministic policy differs"
-        )
+        raise ValueError("Incompatible result cells: code, split seed, or environment differs")
     inconsistent_models = [model for model, recipes in recipes_by_model.items() if len(recipes) > 1]
     if inconsistent_models:
         raise ValueError(f"Incompatible training recipes for models: {inconsistent_models}")
@@ -276,6 +275,7 @@ def augmentation_tests(frame: pd.DataFrame) -> pd.DataFrame:
         for model in sorted(values["model"].unique()):
             model_values = values.loc[values["model"] == model]
             for condition, control in (
+                ("overlap", "center"),
                 ("nonoverlap", "center_x2"),
                 ("overlap", "center_x6"),
             ):
@@ -370,7 +370,7 @@ def validate_matched_augmentation_compute(
     conditions = {"center_x2", "nonoverlap", "center_x6", "overlap"}
     for payload in payloads:
         condition = str(payload.get("condition"))
-        if condition not in conditions:
+        if condition not in conditions or payload.get("ica_policy") != "none":
             continue
         base = tuple(
             payload.get(key)
@@ -381,7 +381,8 @@ def validate_matched_augmentation_compute(
                 int(epoch.get("train_batch_count", 0))
                 for epoch in report.get("training_history", [])
             )
-            if strict and len(batches_per_epoch) != PAPER_EPOCHS:
+            is_classical = payload.get("model") == "CSP+LDA"
+            if strict and not is_classical and len(batches_per_epoch) != PAPER_EPOCHS:
                 raise ValueError(
                     f"Compute audit for {(*base, fold_index)} requires "
                     f"{PAPER_EPOCHS} recorded epochs"

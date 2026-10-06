@@ -36,6 +36,10 @@ def main() -> None:
     parser.add_argument("--require-cuda", action="store_true")
     parser.add_argument("--min-cuda-devices", type=int, default=1)
     parser.add_argument("--allow-incomplete-souza", action="store_true")
+    parser.add_argument(
+        "--datasets", nargs="+", choices=("MI-OpenBCI", "Souza2023"), default=["MI-OpenBCI"]
+    )
+    parser.add_argument("--models", nargs="+", choices=MODEL_NAMES, default=list(MODEL_NAMES))
     parser.add_argument("--quality-output-dir", type=Path, default=RESULTS_DIR / "quality")
     args = parser.parse_args()
     if args.require_cuda and not torch.cuda.is_available():
@@ -61,24 +65,26 @@ def main() -> None:
     missing = [subject for subject in MI_SUBJECTS if not (data_dir / f"{subject}.mat").exists()]
     if missing:
         raise SystemExit(f"Missing MI-OpenBCI files in {data_dir}: {missing}")
-    souza_dir = resolve_souza_data_dir()
-    souza_subjects = [
-        subject for subject in SOUZA_SUBJECTS if (souza_dir / f"{subject}.edf").exists()
-    ]
-    missing_souza = [subject for subject in SOUZA_SUBJECTS if subject not in souza_subjects]
-    duplicates = duplicate_file_groups(souza_dir, SOUZA_SUBJECTS)
-    if duplicates:
-        raise SystemExit(f"Duplicate Souza2023 subject files detected: {duplicates}")
-    if missing_souza and not args.allow_incomplete_souza:
-        raise SystemExit(f"Missing Souza2023 EDF files in {souza_dir}: {missing_souza}")
-    if not souza_subjects:
-        raise SystemExit(f"No Souza2023 EDF files found in {souza_dir}")
+    souza_subjects: list[str] = []
+    missing_souza: list[str] = []
+    if "Souza2023" in args.datasets:
+        souza_dir = resolve_souza_data_dir()
+        souza_subjects = [
+            subject for subject in SOUZA_SUBJECTS if (souza_dir / f"{subject}.edf").exists()
+        ]
+        missing_souza = [subject for subject in SOUZA_SUBJECTS if subject not in souza_subjects]
+        duplicates = duplicate_file_groups(souza_dir, SOUZA_SUBJECTS)
+        if duplicates:
+            raise SystemExit(f"Duplicate Souza2023 subject files detected: {duplicates}")
+        if missing_souza and not args.allow_incomplete_souza:
+            raise SystemExit(f"Missing Souza2023 EDF files in {souza_dir}: {missing_souza}")
+        if not souza_subjects:
+            raise SystemExit(f"No Souza2023 EDF files found in {souza_dir}")
     quality_tables = []
     quality_metadata = []
-    local_subjects = {
-        "MI-OpenBCI": list(MI_SUBJECTS),
-        "Souza2023": souza_subjects,
-    }
+    local_subjects = {"MI-OpenBCI": list(MI_SUBJECTS)}
+    if "Souza2023" in args.datasets:
+        local_subjects["Souza2023"] = souza_subjects
     for dataset, subjects in local_subjects.items():
         for subject in subjects:
             recording = load_subject(dataset, subject)
@@ -105,13 +111,12 @@ def main() -> None:
             "automatic_exclusion": False,
         },
     )
-    input_shapes = {
-        "MI-OpenBCI": (15, TRIAL_SAMPLES),
-        "Souza2023": (16, SOUZA_TRIAL_SAMPLES),
-    }
+    input_shapes = {"MI-OpenBCI": (15, TRIAL_SAMPLES)}
+    if "Souza2023" in args.datasets:
+        input_shapes["Souza2023"] = (16, SOUZA_TRIAL_SAMPLES)
     for dataset, (n_chans, n_times) in input_shapes.items():
         sample = torch.from_numpy(np.zeros((2, n_chans, n_times), dtype=np.float32))
-        for model_name in MODEL_NAMES:
+        for model_name in args.models:
             module = make_module(
                 model_name,
                 n_chans=n_chans,
@@ -122,13 +127,9 @@ def main() -> None:
             with torch.no_grad():
                 output = module(sample)
             if tuple(output.shape) != (2, 2):
-                raise SystemExit(
-                    f"Unexpected {dataset}/{model_name} output: {tuple(output.shape)}"
-                )
+                raise SystemExit(f"Unexpected {dataset}/{model_name} output: {tuple(output.shape)}")
             parameters = parameter_count(model_name, n_chans, n_times, TARGET_SFREQ)
-            print(
-                f"{dataset}/{model_name}: output={tuple(output.shape)} params={parameters}"
-            )
+            print(f"{dataset}/{model_name}: output={tuple(output.shape)} params={parameters}")
     print("preflight=OK")
 
 
