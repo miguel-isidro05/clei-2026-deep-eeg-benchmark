@@ -313,9 +313,10 @@ def review_closure_table(*, has_latency: bool = False) -> pd.DataFrame:
         ),
         (
             "convergence",
-            "resolved",
-            "All deep folds have loss trajectories and 300-epoch completion audited.",
-            "",
+            "resolved_by_design",
+            "All deep folds use the frozen 300-epoch budget and export training-loss diagnostics.",
+            "No validation curve or validation-based epoch selection was used; held-out partitions "
+            "were never used for model selection.",
         ),
         latency_row,
         (
@@ -351,15 +352,27 @@ def _sha256(path: Path) -> str:
 
 
 def write_artifact_manifest(root: Path, output: Path) -> None:
+    excluded = ("fold_cache/**", "logs/**")
+    excluded_roots = {"fold_cache", "logs"}
     files = []
     for path in sorted(root.rglob("*")):
-        if path.is_file() and path != output:
+        relative = path.relative_to(root)
+        if (
+            path.is_file()
+            and path != output
+            and relative.parts[0] not in excluded_roots
+        ):
             files.append(
                 {
-                    "path": str(path.relative_to(root)),
+                    "path": str(relative),
                     "bytes": path.stat().st_size,
                     "sha256": _sha256(path),
                 }
             )
     output.parent.mkdir(parents=True, exist_ok=True)
-    output.write_text(json.dumps({"files": files}, indent=2) + "\n", encoding="utf-8")
+    payload = {
+        "scope": "stable publication artifacts",
+        "excluded": list(excluded),
+        "files": files,
+    }
+    output.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")

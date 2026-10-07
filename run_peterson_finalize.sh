@@ -41,6 +41,9 @@ if [[ -n "$latency_devices" ]]; then
     --output-dir "$PETERSON_RESULTS_DIR/latency"
 fi
 python -u scripts/generate_peterson_figures.py --results-dir "$PETERSON_RESULTS_DIR"
+python -u scripts/write_run_report.py \
+  --results-dir "$PETERSON_RESULTS_DIR" \
+  --status completed
 python -u scripts/generate_peterson_readout.py --results-dir "$PETERSON_RESULTS_DIR"
 
 echo "peterson_finalize=OK output=$PETERSON_RESULTS_DIR"

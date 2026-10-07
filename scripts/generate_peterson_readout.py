@@ -57,7 +57,14 @@ def main() -> None:
         & (paired["ica_policy"] == "none")
         & paired["reject_holm_0_05"].astype(bool)
     ]
-    lines += ["", "## Confirmatory paired inference", ""]
+    lines += [
+        "",
+        "## Confirmatory paired inference",
+        "",
+        "Holm correction is applied within each protocol×metric family of planned model "
+        "contrasts (three protocols × accuracy/kappa).",
+        "",
+    ]
     if significant.empty:
         lines.append("No overlap/no-ICA model contrast survived Holm correction.")
     else:
@@ -71,7 +78,8 @@ def main() -> None:
         "",
         "## Interpretation rules",
         "",
-        "- Wilcoxon-Holm overlap/no-ICA accuracy and kappa contrasts are confirmatory.",
+        "- Planned Wilcoxon–Holm overlap/no-ICA accuracy and kappa contrasts are confirmatory; "
+        "the correction family is one protocol×metric block.",
         "- Friedman, protocol-gap, ICA, calibration, ERD/ERS, ranking, and "
         "convergence analyses are exploratory or diagnostic.",
         "- LOSO is reported separately and must not be pooled with within-subject protocols.",

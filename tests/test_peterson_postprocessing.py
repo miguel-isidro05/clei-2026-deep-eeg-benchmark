@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import hashlib
+import json
+
 import numpy as np
 import pandas as pd
 
@@ -10,6 +13,7 @@ from deepbench.peterson_postprocessing import (
     protocol_gap_tests,
     review_closure_table,
     training_diagnostics,
+    write_artifact_manifest,
 )
 
 
@@ -121,3 +125,24 @@ def test_review_closure_preserves_single_dataset_limitation() -> None:
     assert "single" in scope["limitation"].lower()
     latency = table.loc[table["item_id"] == "latency"].iloc[0]
     assert latency["status"] == "pending_measurement"
+    convergence = table.loc[table["item_id"] == "convergence"].iloc[0]
+    assert convergence["status"] == "resolved_by_design"
+    assert "validation" in convergence["limitation"].lower()
+
+
+def test_publication_manifest_excludes_mutable_runtime_artifacts(tmp_path) -> None:
+    (tmp_path / "cells").mkdir()
+    (tmp_path / "logs").mkdir()
+    (tmp_path / "fold_cache" / "hash").mkdir(parents=True)
+    stable = tmp_path / "cells" / "result.json"
+    stable.write_text('{"accuracy": 0.8}\n', encoding="utf-8")
+    (tmp_path / "logs" / "finalize.log").write_text("still changing\n", encoding="utf-8")
+    (tmp_path / "fold_cache" / "hash" / "fold-0.json").write_text("{}\n", encoding="utf-8")
+    output = tmp_path / "manifests" / "publication_artifacts.json"
+
+    write_artifact_manifest(tmp_path, output)
+
+    manifest = json.loads(output.read_text(encoding="utf-8"))
+    assert manifest["excluded"] == ["fold_cache/**", "logs/**"]
+    assert [record["path"] for record in manifest["files"]] == ["cells/result.json"]
+    assert manifest["files"][0]["sha256"] == hashlib.sha256(stable.read_bytes()).hexdigest()

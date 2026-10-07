@@ -19,12 +19,76 @@ from .statistics import aggregate_seeds
 
 PROTOCOLS = ("within_split", "within_session", "loso")
 MODEL_ORDER = list(PETERSON_MODEL_NAMES)
+MODEL_COLORS = {
+    "CSP+LDA": "#6B7280",
+    "EEGNet": "#0072B2",
+    "FBCNet": "#009E73",
+    "ShallowConvNet": "#E69F00",
+    "EEGConformer": "#CC79A7",
+}
+PROTOCOL_LABELS = {
+    "within_split": "Within-split",
+    "within_session": "Within-session",
+    "loso": "LOSO",
+}
+
+
+def _set_publication_style() -> None:
+    """Apply a compact, colorblind-safe style suitable for two-column papers."""
+    sns.set_theme(style="ticks", context="paper")
+    plt.rcParams.update(
+        {
+            "font.family": "sans-serif",
+            "font.sans-serif": ["Arial", "Helvetica", "DejaVu Sans"],
+            "font.size": 8.5,
+            "axes.titlesize": 10,
+            "axes.titleweight": "bold",
+            "axes.labelsize": 9,
+            "axes.linewidth": 0.8,
+            "axes.spines.top": False,
+            "axes.spines.right": False,
+            "xtick.labelsize": 8,
+            "ytick.labelsize": 8,
+            "legend.fontsize": 7.5,
+            "legend.frameon": False,
+            "lines.linewidth": 1.6,
+            "lines.markersize": 4.5,
+            "grid.color": "#D1D5DB",
+            "grid.linestyle": "--",
+            "grid.linewidth": 0.6,
+            "grid.alpha": 0.65,
+            "pdf.fonttype": 42,
+            "ps.fonttype": 42,
+            "savefig.dpi": 300,
+            "savefig.facecolor": "white",
+        }
+    )
+
+
+def _format_protocol_axis(ax: plt.Axes) -> None:
+    labels = [
+        PROTOCOL_LABELS.get(str(label.get_text()), label.get_text())
+        for label in ax.get_xticklabels()
+    ]
+    ax.set_xticks(ax.get_xticks(), labels)
+
+
+def _forest_labels(data: pd.DataFrame) -> list[str]:
+    labels: list[str] = []
+    for row in data.itertuples():
+        protocol = PROTOCOL_LABELS.get(str(row.protocol), str(row.protocol))
+        if hasattr(row, "comparison"):
+            comparison = str(row.comparison).replace("-", " − ").replace("_x", " ×")
+            labels.append(f"{row.model}: {comparison} ({protocol})")
+        else:
+            labels.append(f"{row.model_a} − {row.model_b} ({protocol})")
+    return labels
 
 
 def _save(fig: plt.Figure, output_dir: Path, stem: str) -> None:
     output_dir.mkdir(parents=True, exist_ok=True)
     fig.tight_layout()
-    fig.savefig(output_dir / f"{stem}.png", dpi=220, bbox_inches="tight")
+    fig.savefig(output_dir / f"{stem}.png", dpi=300, bbox_inches="tight")
     fig.savefig(output_dir / f"{stem}.pdf", bbox_inches="tight")
     plt.close(fig)
 
@@ -49,12 +113,14 @@ def _performance(frame: pd.DataFrame, output_dir: Path, metric: str) -> None:
         hue="model",
         order=PROTOCOLS,
         hue_order=MODEL_ORDER,
+        palette=MODEL_COLORS,
         errorbar=("ci", 95),
         dodge=0.35,
         ax=ax,
     )
     ax.axhline(0.5 if metric == "accuracy" else 0.0, color="0.4", ls="--", lw=1)
     ax.set(xlabel="Protocol", ylabel=metric.replace("_", " ").title())
+    _format_protocol_axis(ax)
     ax.legend(ncol=3, fontsize=8, title=None)
     _save(fig, output_dir, f"primary_{metric}")
 
@@ -68,7 +134,7 @@ def _subject_heatmap(frame: pd.DataFrame, output_dir: Path, metric: str) -> None
         )
         pivot = pivot.reindex(columns=MODEL_ORDER)
         sns.heatmap(pivot, annot=True, fmt=".2f", cmap="viridis", vmin=0, vmax=1, ax=ax)
-        ax.set_title(protocol.replace("_", " "))
+        ax.set_title(PROTOCOL_LABELS[protocol])
         ax.set(xlabel="", ylabel="Participant" if ax is axes[0] else "")
     _save(fig, output_dir, f"subject_{metric}_heatmaps")
 
@@ -80,7 +146,7 @@ def _condition_heatmap(frame: pd.DataFrame, output_dir: Path, metric: str) -> No
     for ax, protocol in zip(axes, PROTOCOLS, strict=True):
         pivot = summary.loc[protocol].unstack("model").reindex(columns=MODEL_ORDER)
         sns.heatmap(pivot, annot=True, fmt=".3f", cmap="mako", vmin=0.45, vmax=0.9, ax=ax)
-        ax.set_title(protocol.replace("_", " "))
+        ax.set_title(PROTOCOL_LABELS[protocol])
         ax.set(xlabel="", ylabel="Temporal condition")
     _save(fig, output_dir, f"condition_{metric}_heatmaps")
 
@@ -89,27 +155,38 @@ def _forest(table: pd.DataFrame, output_dir: Path, metric: str, stem: str) -> No
     data = table.loc[table["metric"] == metric].reset_index(drop=True)
     if data.empty:
         return
-    labels = []
-    for row in data.itertuples():
-        if hasattr(row, "comparison"):
-            labels.append(f"{row.model}: {row.comparison}")
-        else:
-            labels.append(f"{row.model_a} - {row.model_b} ({row.protocol})")
+    labels = _forest_labels(data)
     mean_col = "mean_difference" if "mean_difference" in data else "mean_difference_a_minus_b"
     low_col = "difference_ci95_low"
     high_col = "difference_ci95_high"
     y = np.arange(len(data))
     means = data[mean_col].to_numpy()
     fig, ax = plt.subplots(figsize=(9, max(4, 0.28 * len(data))))
-    ax.errorbar(
-        means,
-        y,
-        xerr=np.vstack((means - data[low_col], data[high_col] - means)),
-        fmt="o",
-        capsize=2,
+    significant = (
+        data["reject_holm_0_05"].astype(bool).to_numpy()
+        if "reject_holm_0_05" in data
+        else np.zeros(len(data), dtype=bool)
     )
+    errors = np.vstack((means - data[low_col], data[high_col] - means))
+    for is_significant, color, label in (
+        (False, "#0072B2", "Not significant"),
+        (True, "#D55E00", "Holm-adjusted p < 0.05"),
+    ):
+        mask = significant == is_significant
+        if mask.any():
+            ax.errorbar(
+                means[mask],
+                y[mask],
+                xerr=errors[:, mask],
+                fmt="o",
+                color=color,
+                ecolor=color,
+                capsize=2.5,
+                label=label,
+            )
     ax.axvline(0, color="0.3", ls="--")
     ax.set(yticks=y, yticklabels=labels, xlabel=f"Paired difference in {metric}")
+    ax.legend(loc="lower right")
     _save(fig, output_dir, f"{stem}_{metric}_forest")
 
 
@@ -188,15 +265,19 @@ def _roc(payloads: list[dict[str, object]], output_dir: Path, protocol: str) -> 
         curves = np.asarray(subject_curves)
         mean = curves.mean(axis=0)
         sem = curves.std(axis=0, ddof=1) / np.sqrt(len(curves))
-        ax.plot(grid, mean, label=model)
+        ax.plot(grid, mean, label=model, color=MODEL_COLORS[model])
         ax.fill_between(
-            grid, np.clip(mean - 1.96 * sem, 0, 1), np.clip(mean + 1.96 * sem, 0, 1), alpha=0.1
+            grid,
+            np.clip(mean - 1.96 * sem, 0, 1),
+            np.clip(mean + 1.96 * sem, 0, 1),
+            color=MODEL_COLORS[model],
+            alpha=0.12,
         )
     ax.plot([0, 1], [0, 1], "k--", lw=1)
     ax.set(
         xlabel="False-positive rate",
         ylabel="True-positive rate",
-        title=f"Subject-macro ROC: {protocol}",
+        title=f"Subject-macro ROC: {PROTOCOL_LABELS[protocol]}",
     )
     ax.legend(fontsize=8)
     _save(fig, output_dir, f"roc_subject_macro_{protocol}")
@@ -225,7 +306,7 @@ def _calibration(payloads: list[dict[str, object]], output_dir: Path) -> None:
         x = np.nanmean(subject_x, axis=0)
         y = np.nanmean(subject_y, axis=0)
         valid = np.isfinite(x) & np.isfinite(y)
-        ax.plot(x[valid], y[valid], "o-", ms=4, label=model)
+        ax.plot(x[valid], y[valid], "o-", ms=4, label=model, color=MODEL_COLORS[model])
     ax.plot([0, 1], [0, 1], "k--", lw=1)
     ax.set(
         xlabel="Mean predicted probability",
@@ -272,9 +353,11 @@ def _rankings(statistics: Path, output_dir: Path) -> None:
         hue="model",
         order=PROTOCOLS,
         hue_order=MODEL_ORDER,
+        palette=MODEL_COLORS,
         ax=ax,
     )
     ax.set(ylabel="Mean participant rank (1 = best)", xlabel="Protocol")
+    _format_protocol_axis(ax)
     ax.legend(ncol=3, fontsize=8, title=None)
     _save(fig, output_dir, "model_rankings")
 
@@ -293,9 +376,11 @@ def _sample_accounting(statistics: Path, output_dir: Path) -> None:
         hue="model",
         order=PROTOCOLS,
         hue_order=MODEL_ORDER,
+        palette=MODEL_COLORS,
         ax=ax,
     )
     ax.set(ylabel="Mean training examples per fold", xlabel="Protocol")
+    _format_protocol_axis(ax)
     ax.legend(ncol=3, fontsize=8, title=None)
     _save(fig, output_dir, "sample_accounting")
 
@@ -312,7 +397,15 @@ def _seed_variability(frame: pd.DataFrame, output_dir: Path) -> None:
         .reset_index(name="seed_sd")
     )
     fig, ax = plt.subplots(figsize=(10, 5))
-    sns.boxplot(data=seed_sd, x="model", y="seed_sd", hue="protocol", order=MODEL_ORDER, ax=ax)
+    sns.boxplot(
+        data=seed_sd,
+        x="model",
+        y="seed_sd",
+        hue="protocol",
+        order=MODEL_ORDER,
+        palette=("#0072B2", "#009E73", "#E69F00"),
+        ax=ax,
+    )
     ax.tick_params(axis="x", rotation=25)
     ax.set(xlabel="", ylabel="Within-participant SD across seeds")
     _save(fig, output_dir, "seed_variability")
@@ -333,8 +426,13 @@ def _training_curves(payloads: list[dict[str, object]], output_dir: Path) -> Non
                     for report in payload["fold_reports"]:
                         curves.append([e["train_loss"] for e in report["training_history"]])
             values = np.asarray(curves)
-            ax.plot(np.arange(1, values.shape[1] + 1), np.median(values, axis=0), label=model)
-        ax.set(title=protocol.replace("_", " "), xlabel="Epoch")
+            ax.plot(
+                np.arange(1, values.shape[1] + 1),
+                np.median(values, axis=0),
+                label=model,
+                color=MODEL_COLORS[model],
+            )
+        ax.set(title=PROTOCOL_LABELS[protocol], xlabel="Epoch")
     axes[0].set_ylabel("Median training loss")
     axes[-1].legend(fontsize=8)
     _save(fig, output_dir, "training_convergence")
@@ -384,7 +482,7 @@ def _latency(results_dir: Path, output_dir: Path) -> None:
     fig, ax = plt.subplots(figsize=(8, 4))
     x = np.arange(len(data))
     values = data["median_batch_ms"].to_numpy(float)
-    ax.bar(x, values)
+    ax.bar(x, values, color=[MODEL_COLORS[model] for model in data.index])
     spread_column = "median_batch_ms_between_gpu_sd"
     if spread_column in data:
         ax.errorbar(
@@ -412,7 +510,7 @@ def generate_peterson_figures(results_dir: Path) -> list[Path]:
     payloads = [
         json.loads(path.read_text()) for path in sorted((results_dir / "cells").glob("*.json"))
     ]
-    sns.set_theme(style="whitegrid", context="paper")
+    _set_publication_style()
     for metric in ("accuracy", "kappa"):
         _performance(frame, output_dir, metric)
         _subject_heatmap(frame, output_dir, metric)
