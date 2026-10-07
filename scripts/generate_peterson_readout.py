@@ -78,7 +78,7 @@ def main() -> None:
         "",
         "## Interpretation rules",
         "",
-        "- Planned Wilcoxon–Holm overlap/no-ICA accuracy and kappa contrasts are confirmatory; "
+        "- Planned Wilcoxon-Holm overlap/no-ICA accuracy and kappa contrasts are confirmatory; "
         "the correction family is one protocol×metric block.",
         "- Friedman, protocol-gap, ICA, calibration, ERD/ERS, ranking, and "
         "convergence analyses are exploratory or diagnostic.",
