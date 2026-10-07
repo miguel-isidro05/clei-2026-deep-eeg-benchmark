@@ -1,8 +1,5 @@
 from __future__ import annotations
 
-import json
-from pathlib import Path
-
 import numpy as np
 import pandas as pd
 
@@ -10,6 +7,7 @@ from deepbench.peterson_postprocessing import (
     all_metric_descriptives,
     friedman_omnibus,
     prediction_diagnostics,
+    protocol_gap_tests,
     review_closure_table,
     training_diagnostics,
 )
@@ -23,7 +21,12 @@ def _metric_frame() -> pd.DataFrame:
             for seed in (0, 1):
                 for model_index, model in enumerate(models):
                     for metric in ("accuracy", "kappa", "roc_auc"):
-                        value = 0.55 + 0.03 * model_index + 0.005 * subject_index
+                        protocol_offset = {
+                            "within_split": 0.04,
+                            "within_session": 0.02,
+                            "loso": 0.0,
+                        }[protocol]
+                        value = 0.55 + 0.03 * model_index + 0.005 * subject_index + protocol_offset
                         if metric == "kappa":
                             value = 2 * value - 1
                         rows.append(
@@ -60,6 +63,14 @@ def test_friedman_reports_kendall_w_and_exploratory_scope() -> None:
     assert row["analysis_tier"] == "exploratory"
 
 
+def test_protocol_gap_holm_family_spans_models_and_comparisons() -> None:
+    table = protocol_gap_tests(_metric_frame())
+    accuracy = table.loc[table["metric"] == "accuracy"]
+    assert len(accuracy) == 6
+    assert (accuracy["p_holm"] >= accuracy["p_raw"]).all()
+    assert accuracy["p_holm"].max() >= 0.18
+
+
 def test_prediction_and_training_diagnostics_are_explicit() -> None:
     payload = {
         "dataset": "MI-OpenBCI",
@@ -76,8 +87,18 @@ def test_prediction_and_training_diagnostics_are_explicit() -> None:
         "fold_reports": [
             {
                 "training_history": [
-                    {"epoch": 1, "train_loss": 1.0, "duration_seconds": 0.2, "train_batch_count": 2},
-                    {"epoch": 2, "train_loss": 0.5, "duration_seconds": 0.3, "train_batch_count": 2},
+                    {
+                        "epoch": 1,
+                        "train_loss": 1.0,
+                        "duration_seconds": 0.2,
+                        "train_batch_count": 2,
+                    },
+                    {
+                        "epoch": 2,
+                        "train_loss": 0.5,
+                        "duration_seconds": 0.3,
+                        "train_batch_count": 2,
+                    },
                 ]
             }
         ],
@@ -98,4 +119,5 @@ def test_review_closure_preserves_single_dataset_limitation() -> None:
     scope = table.loc[table["item_id"] == "external_low_cost_validation"].iloc[0]
     assert scope["status"] == "unresolved_by_design"
     assert "single" in scope["limitation"].lower()
-
+    latency = table.loc[table["item_id"] == "latency"].iloc[0]
+    assert latency["status"] == "pending_measurement"
