@@ -4,7 +4,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from deepbench.config import MODEL_NAMES
+from deepbench.config import MODEL_NAMES, PAPER_EPOCHS
 from deepbench.statistics import (
     aggregate_seeds,
     completeness_table,
@@ -165,6 +165,51 @@ def test_compute_matched_augmentation_rejects_unequal_updates() -> None:
                 },
             ]
         )
+
+
+def test_strict_compute_audit_ignores_overlap_outside_within_split() -> None:
+    payload = {
+        "dataset": "MI-OpenBCI",
+        "protocol": "loso",
+        "ica_policy": "none",
+        "model": "EEGNet",
+        "subject": "S02",
+        "seed": 0,
+        "condition": "overlap",
+        "fold_reports": [
+            {
+                "n_train_examples": 600,
+                "training_history": [
+                    {"train_batch_count": 10} for _ in range(PAPER_EPOCHS)
+                ],
+            }
+        ],
+    }
+
+    validate_matched_augmentation_compute([payload], strict=True)
+
+
+def test_strict_compute_audit_requires_declared_pair_within_split() -> None:
+    payload = {
+        "dataset": "MI-OpenBCI",
+        "protocol": "within_split",
+        "ica_policy": "none",
+        "model": "EEGNet",
+        "subject": "S02",
+        "seed": 0,
+        "condition": "overlap",
+        "fold_reports": [
+            {
+                "n_train_examples": 600,
+                "training_history": [
+                    {"train_batch_count": 10} for _ in range(PAPER_EPOCHS)
+                ],
+            }
+        ],
+    }
+
+    with pytest.raises(ValueError, match="missing.*center_x6"):
+        validate_matched_augmentation_compute([payload], strict=True)
 
 
 def test_paired_models_require_identical_subject_cohorts() -> None:
