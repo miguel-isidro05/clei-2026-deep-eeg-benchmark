@@ -374,6 +374,37 @@ def _quality(results_dir: Path, output_dir: Path) -> None:
         _save(fig, output_dir, "erd_ers")
 
 
+def _latency(results_dir: Path, output_dir: Path) -> None:
+    path = results_dir / "latency" / "latency.csv"
+    if not path.exists():
+        return
+    data = pd.read_csv(path)
+    data = data.loc[data["batch_size"] == 1].set_index("model").reindex(MODEL_ORDER[1:])
+    data = data.dropna(subset=["median_batch_ms"])
+    fig, ax = plt.subplots(figsize=(8, 4))
+    x = np.arange(len(data))
+    values = data["median_batch_ms"].to_numpy(float)
+    ax.bar(x, values)
+    spread_column = "median_batch_ms_between_gpu_sd"
+    if spread_column in data:
+        ax.errorbar(
+            x,
+            values,
+            yerr=data[spread_column].fillna(0).to_numpy(float),
+            fmt="none",
+            color="black",
+            capsize=3,
+        )
+    ax.set(
+        xticks=x,
+        xticklabels=data.index,
+        ylabel="Median model-forward latency (ms)",
+        title="Batch-one latency; median across GPUs",
+    )
+    ax.tick_params(axis="x", rotation=20)
+    _save(fig, output_dir, "model_forward_latency")
+
+
 def generate_peterson_figures(results_dir: Path) -> list[Path]:
     statistics = results_dir / "statistics"
     output_dir = results_dir / "figures"
@@ -404,4 +435,5 @@ def generate_peterson_figures(results_dir: Path) -> list[Path]:
     _rankings(statistics, output_dir)
     _sample_accounting(statistics, output_dir)
     _quality(results_dir, output_dir)
+    _latency(results_dir, output_dir)
     return sorted(output_dir.glob("*"))
