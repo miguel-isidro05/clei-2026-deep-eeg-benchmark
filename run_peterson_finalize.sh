@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+project_root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+cd "$project_root"
+export PYTHONPATH="$project_root/src${PYTHONPATH:+:$PYTHONPATH}"
+
 : "${PETERSON_RESULTS_DIR:?Set PETERSON_RESULTS_DIR to the completed Peterson result directory}"
 
 python -u scripts/check_peterson_journal.py --output-dir "$PETERSON_RESULTS_DIR"
