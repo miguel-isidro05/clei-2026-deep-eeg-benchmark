@@ -12,6 +12,10 @@ from .models import recipe_dict
 from .peterson_profile import expected_cell_names
 
 
+def _json_canonical(value: object) -> str:
+    return json.dumps(value, sort_keys=True, separators=(",", ":"))
+
+
 def audit_peterson_results(results_dir: Path) -> tuple[pd.DataFrame, list[str]]:
     manifest_path = results_dir / "manifests" / "peterson-journal-expected.json"
     issues: list[str] = []
@@ -46,7 +50,9 @@ def audit_peterson_results(results_dir: Path) -> tuple[pd.DataFrame, list[str]]:
             issues.append(f"{relative} has epochs={configuration.get('epochs')}")
         if configuration.get("code_sha256") != code_sha256:
             issues.append(f"{relative} has a different scientific code fingerprint")
-        if configuration.get("recipe") != recipe_dict(model, expected_epochs):
+        if _json_canonical(configuration.get("recipe")) != _json_canonical(
+            recipe_dict(model, expected_epochs)
+        ):
             issues.append(f"{relative} has a non-frozen recipe")
         if payload.get("seed") not in PAPER_SEEDS:
             issues.append(f"{relative} has a seed outside the frozen profile")

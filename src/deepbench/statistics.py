@@ -370,7 +370,11 @@ def validate_matched_augmentation_compute(
     conditions = {"center_x2", "nonoverlap", "center_x6", "overlap"}
     for payload in payloads:
         condition = str(payload.get("condition"))
-        if condition not in conditions or payload.get("ica_policy") != "none":
+        if (
+            payload.get("protocol") != "within_split"
+            or condition not in conditions
+            or payload.get("ica_policy") != "none"
+        ):
             continue
         base = tuple(
             payload.get(key)
