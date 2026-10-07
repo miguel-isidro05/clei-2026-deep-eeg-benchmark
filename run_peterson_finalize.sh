@@ -11,6 +11,7 @@ if [[ -n "${PETERSON_LATENCY_DEVICE:-}" ]]; then
     --datasets MI-OpenBCI \
     --models EEGNet FBCNet ShallowConvNet EEGConformer \
     --batch-sizes 1 64 \
+    --windowed-transfer \
     --output-dir "$PETERSON_RESULTS_DIR/latency"
 fi
 python -u scripts/generate_peterson_figures.py --results-dir "$PETERSON_RESULTS_DIR"
