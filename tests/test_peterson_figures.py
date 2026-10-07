@@ -53,6 +53,8 @@ def _primary_metric_frame() -> pd.DataFrame:
                 for seed in (0, 1):
                     rows.append(
                         {
+                            "dataset": "MI-OpenBCI",
+                            "task": "motor_imagery_vs_rest",
                             "condition": "overlap",
                             "ica_policy": "none",
                             "metric": "accuracy",

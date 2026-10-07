@@ -15,7 +15,7 @@ import seaborn as sns
 from sklearn.metrics import roc_curve
 
 from .config import PETERSON_MODEL_NAMES
-from .statistics import aggregate_seeds
+from .statistics import aggregate_seeds, mean_ci
 
 PROTOCOLS = ("within_split", "within_session", "loso")
 MODEL_ORDER = list(PETERSON_MODEL_NAMES)
@@ -103,37 +103,94 @@ def _primary(frame: pd.DataFrame, metric: str) -> pd.DataFrame:
     )
 
 
+def _primary_summary(frame: pd.DataFrame, metric: str) -> pd.DataFrame:
+    """Summarize seed-averaged participant values with Student-t intervals."""
+    participant_values = _primary(frame, metric)
+    rows: list[dict[str, object]] = []
+    for (protocol, model), group in participant_values.groupby(
+        ["protocol", "model"], observed=True
+    ):
+        mean, low, high = mean_ci(group["value"].to_numpy(float))
+        rows.append(
+            {
+                "protocol": protocol,
+                "model": model,
+                "mean": mean,
+                "ci95_low": low,
+                "ci95_high": high,
+                "n_subjects": int(group["subject"].nunique()),
+            }
+        )
+    return pd.DataFrame(rows)
+
+
+def _metric_color_limits(metric: str, values: np.ndarray) -> tuple[float, float]:
+    """Return rounded, metric-valid bounds that contain every plotted value."""
+    finite = np.asarray(values, dtype=float)
+    finite = finite[np.isfinite(finite)]
+    if finite.size == 0:
+        raise ValueError(f"Cannot choose {metric} color limits without finite values")
+    lower = float(np.floor(finite.min() * 10) / 10)
+    upper = float(np.ceil(finite.max() * 10) / 10)
+    if metric == "accuracy":
+        lower, upper = max(0.0, lower), min(1.0, upper)
+    elif metric == "kappa":
+        lower, upper = max(-1.0, min(0.0, lower)), min(1.0, max(0.0, upper))
+    else:
+        raise ValueError(f"Unsupported heatmap metric: {metric}")
+    if np.isclose(lower, upper):
+        upper = min(1.0, lower + 0.1)
+        lower = max(-1.0 if metric == "kappa" else 0.0, upper - 0.1)
+    return lower, upper
+
+
+def _heatmap_scale(metric: str, values: np.ndarray) -> dict[str, object]:
+    lower, upper = _metric_color_limits(metric, values)
+    if metric == "kappa":
+        return {"cmap": "vlag", "vmin": lower, "vmax": upper, "center": 0.0}
+    return {"cmap": "viridis", "vmin": lower, "vmax": upper}
+
+
 def _performance(frame: pd.DataFrame, output_dir: Path, metric: str) -> None:
-    data = _primary(frame, metric)
+    data = _primary_summary(frame, metric)
     fig, ax = plt.subplots(figsize=(10, 5))
-    sns.pointplot(
-        data=data,
-        x="protocol",
-        y="value",
-        hue="model",
-        order=PROTOCOLS,
-        hue_order=MODEL_ORDER,
-        palette=MODEL_COLORS,
-        errorbar=("ci", 95),
-        dodge=0.35,
-        ax=ax,
-    )
+    protocol_positions = np.arange(len(PROTOCOLS), dtype=float)
+    offsets = np.linspace(-0.28, 0.28, len(MODEL_ORDER))
+    for offset, model in zip(offsets, MODEL_ORDER, strict=True):
+        selected = data.loc[data["model"] == model].set_index("protocol").reindex(PROTOCOLS)
+        means = selected["mean"].to_numpy(float)
+        low = selected["ci95_low"].to_numpy(float)
+        high = selected["ci95_high"].to_numpy(float)
+        ax.errorbar(
+            protocol_positions + offset,
+            means,
+            yerr=np.vstack((means - low, high - means)),
+            fmt="o-",
+            color=MODEL_COLORS[model],
+            capsize=3,
+            label=model,
+        )
     ax.axhline(0.5 if metric == "accuracy" else 0.0, color="0.4", ls="--", lw=1)
-    ax.set(xlabel="Protocol", ylabel=metric.replace("_", " ").title())
-    _format_protocol_axis(ax)
+    ax.set(
+        xlabel="Protocol",
+        ylabel=metric.replace("_", " ").title(),
+        xticks=protocol_positions,
+        xticklabels=[PROTOCOL_LABELS[protocol] for protocol in PROTOCOLS],
+    )
     ax.legend(ncol=3, fontsize=8, title=None)
     _save(fig, output_dir, f"primary_{metric}")
 
 
 def _subject_heatmap(frame: pd.DataFrame, output_dir: Path, metric: str) -> None:
     data = _primary(frame, metric)
+    scale = _heatmap_scale(metric, data["value"].to_numpy(float))
     fig, axes = plt.subplots(1, 3, figsize=(14, 4), sharey=True)
     for ax, protocol in zip(axes, PROTOCOLS, strict=True):
         pivot = data.loc[data["protocol"] == protocol].pivot(
             index="subject", columns="model", values="value"
         )
         pivot = pivot.reindex(columns=MODEL_ORDER)
-        sns.heatmap(pivot, annot=True, fmt=".2f", cmap="viridis", vmin=0, vmax=1, ax=ax)
+        sns.heatmap(pivot, annot=True, fmt=".2f", ax=ax, **scale)
         ax.set_title(PROTOCOL_LABELS[protocol])
         ax.set(xlabel="", ylabel="Participant" if ax is axes[0] else "")
     _save(fig, output_dir, f"subject_{metric}_heatmaps")
@@ -142,10 +199,11 @@ def _subject_heatmap(frame: pd.DataFrame, output_dir: Path, metric: str) -> None
 def _condition_heatmap(frame: pd.DataFrame, output_dir: Path, metric: str) -> None:
     data = aggregate_seeds(frame.loc[(frame["ica_policy"] == "none") & (frame["metric"] == metric)])
     summary = data.groupby(["protocol", "condition", "model"], observed=True)["value"].mean()
+    scale = _heatmap_scale(metric, summary.to_numpy(float))
     fig, axes = plt.subplots(1, 3, figsize=(15, 4))
     for ax, protocol in zip(axes, PROTOCOLS, strict=True):
         pivot = summary.loc[protocol].unstack("model").reindex(columns=MODEL_ORDER)
-        sns.heatmap(pivot, annot=True, fmt=".3f", cmap="mako", vmin=0.45, vmax=0.9, ax=ax)
+        sns.heatmap(pivot, annot=True, fmt=".3f", ax=ax, **scale)
         ax.set_title(PROTOCOL_LABELS[protocol])
         ax.set(xlabel="", ylabel="Temporal condition")
     _save(fig, output_dir, f"condition_{metric}_heatmaps")

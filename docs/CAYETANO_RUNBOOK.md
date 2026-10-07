@@ -70,19 +70,23 @@ tail -n 40 "$(ls -1t "$PETERSON_RESULTS_DIR"/logs/peterson-*.log | head -n 1)"
 ```bash
 cd /home/imiguel/Desktop/clei-2026-deep-eeg-benchmark
 export PETERSON_RESULTS_DIR="results_peterson_journal_v10_$(git rev-parse --short HEAD)"
-export EXPORT_FILE="/home/imiguel/Desktop/clei-exports/clei-peterson-v10-$(git rev-parse --short HEAD)-$(date -u +%Y%m%d).tar.gz"
+export EXPORT_FILE="/home/imiguel/Desktop/clei-exports/clei-peterson-publication-v10-$(git rev-parse --short HEAD)-$(date -u +%Y%m%d).tar.gz"
 
 mkdir -p /home/imiguel/Desktop/clei-exports
-tar -czf "$EXPORT_FILE" "$PETERSON_RESULTS_DIR"
-cd /home/imiguel/Desktop/clei-exports
-sha256sum "$(basename "$EXPORT_FILE")" > "$(basename "$EXPORT_FILE").sha256"
-ls -lh "$(basename "$EXPORT_FILE")" "$(basename "$EXPORT_FILE").sha256"
+python scripts/export_peterson_publication.py \
+  --results-dir "$PETERSON_RESULTS_DIR" \
+  --output "$EXPORT_FILE"
+
+ls -lh "$EXPORT_FILE" "${EXPORT_FILE}.sha256"
 ```
 
 En la Mac, desde la carpeta donde quieras recibirlo:
 
 ```bash
-scp hinton_2_cayetano:/home/imiguel/Desktop/clei-exports/clei-peterson-v10-*.tar.gz .
-scp hinton_2_cayetano:/home/imiguel/Desktop/clei-exports/clei-peterson-v10-*.tar.gz.sha256 .
-shasum -a 256 -c clei-peterson-v10-*.tar.gz.sha256
+scp hinton_2_cayetano:/home/imiguel/Desktop/clei-exports/clei-peterson-publication-v10-*.tar.gz .
+scp hinton_2_cayetano:/home/imiguel/Desktop/clei-exports/clei-peterson-publication-v10-*.tar.gz.sha256 .
+shasum -a 256 -c clei-peterson-publication-v10-*.tar.gz.sha256
 ```
+
+El exportador verifica cada SHA-256 del manifest antes de comprimir y excluye `logs/` y
+`fold_cache/`. El archivo completo original debe conservarse como procedencia interna.

@@ -1,26 +1,22 @@
-# Cobertura honesta de la retroalimentacion
+# Cobertura de la retroalimentación: Peterson V10
 
-| Observacion | Solucion implementada | Evidencia generada | Estado antes de ejecutar el perfil paper |
-|---|---|---|---|
-| Alcance de modelos | Por decision explicita del autor, el benchmark nuevo queda restringido a EEGNet, FBCNet, ShallowConvNet, EEGConformer y EEGInceptionMI; CSP/CNN2D/ATCNet quedan fuera de esta revision | `docs/EXPERIMENT_SPEC.md`, `src/deepbench/config.py` | Cerrado como decision de alcance, no como resultado empirico |
-| Cohorte low-cost pequena | Se evita pseudorreplicacion, se informa cada sujeto y se añade validacion externa task-matched en 20 sujetos Zhou2020 y 12 sujetos Tavakolan2017 | Tablas separadas por dataset/protocolo | Mitigado, no cerrado: MI-OpenBCI sigue teniendo 10 sujetos y las seeds no aumentan el n biologico |
-| Una sola semilla limita la robustez | Cinco semillas independientes por modelo, sujeto y protocolo | JSON por celda, tabla de variabilidad entre sujetos y entre semillas | Implementado; pendiente completar computo GPU |
-| Falta inferencia pareada y correccion multiple | Wilcoxon bilateral por sujeto y Holm por familia predeclarada | `paired_wilcoxon_holm.csv` | Implementado; pendiente resultados completos |
-| Faltan intervalos de confianza | IC 95% t de Student para medias y diferencias pareadas | Tabla descriptiva y tabla pareada | Implementado; pendiente resultados completos |
-| Sliding windows puede favorecer modelos o inflar n | Mismas condiciones para todos los modelos; test conserva un voto por trial; sujeto es la unidad estadistica | Predicciones y hashes de indices por fold | Cerrado en codigo |
-| Falta cross-session | Leave-one-session-out para Zhou2020 y Tavakolan2017 | Celdas `cross_session` | Implementado; pendiente descarga y computo |
-| ICA no explica como selecciona componentes | Se elimina ICA del analisis primario. La sensibilidad ajusta FastICA solo con training y usa kurtosis > 10, maximo dos, sin seleccion manual | Convergencia, iteraciones y kurtosis por fold | Parcial: auditable, pero no identifica ocular/muscular; no se hace ese claim |
-| Falta sensibilidad a ICA | El perfil primario `ica_policy=none` se contrasta con una sensibilidad exploratoria `kurtosis` | Resultados separados por politica ICA | Implementado; pendiente computo |
-| Latencia poco clara | Perfil model-only con mismo dispositivo, forma, batch, warm-up e iteraciones | `latency.csv` y `latency.json` | Cerrado para latencia computacional; no mide latencia BCI end-to-end |
-| Comparacion con datasets MOABB | Zhou2020 y Tavakolan2017 para right-hand vs rest y cross-session | Resultados por dataset y protocolo, sin mezclar inferencia | Implementado; no permite atribuir diferencias causalmente al costo del hardware |
-| Reproducibilidad insuficiente | Configuracion unica, manifiestos, versions, seeds separadas, predicciones, hashes de codigo/configuracion y reanudacion por fold | `results/manifests`, `results/cells`, `results/fold_cache` | Cerrado en infraestructura; requiere publicar los artefactos finales |
+Este archivo resume el perfil confirmatorio vigente. Los diseños Souza/transferencia conservados
+en `docs/superpowers/` son históricos y no redefinen esta matriz.
 
-## Lo que el codigo no puede cerrar por si solo
+| Observación | Solución V10 | Estado tras la corrida completa |
+|---|---|---|
+| Alcance de modelos | CSP+LDA, EEGNet, FBCNet, ShallowConvNet y EEGConformer bajo la misma matriz | Cerrado |
+| Una sola semilla | Cinco semillas deep; CSP determinista identificado y agregado por participante | Cerrado |
+| Inferencia y multiplicidad | Wilcoxon bilateral pareado, Holm, IC Student-t y rank-biserial | Cerrado |
+| Sliding windows puede inflar el n | Una predicción por trial; sujeto como unidad; controles `center_x2` y `center_x6` emparejados en cómputo | Cerrado |
+| Falta generalización | `within_split`, `within_session` y LOSO separados | Cerrado dentro de Peterson; no demuestra generalización externa |
+| Selección ICA ambigua | Sin ICA como principal; FastICA train-only con regla congelada solo como sensibilidad | Cerrado con claim limitado |
+| Convergencia no demostrada | 300 épocas fijas y curvas de training exportadas; no se afirma convergencia por validación | Cerrado por diseño, con limitación explícita |
+| Latencia poco clara | Forward pass deep con input y dispositivo documentados; se excluye latencia BCI end-to-end | Cerrado con claim limitado |
+| Reproducibilidad | Manifest exacto, predicciones, recetas, hashes, auditor de 3,250 celdas y exportación verificada | Cerrado |
+| Cohorte pequeña / un dataset | Diez participantes Peterson | Limitación inherente |
+| Comparación causal del hardware | No hay brazo research-grade controlado | No resuelto por diseño; no hacer ese claim |
+| Fuentes de métodos y estadística | Auditor bibliográfico con DOI/identificadores para dataset, arquitecturas, CSP, Wilcoxon, Holm y kappa | Cerrado en documentación; pendiente insertar las citas al redactar el manuscrito |
 
-Los claims numericos permanecen abiertos hasta completar todas las celdas con cinco semillas. El
-benchmark externo no convierte datasets heterogeneos en una comparacion causal de hardware. La
-latencia informada es de inferencia del modelo y no incluye adquisicion EEG, espera para acumular
-la ventana, transmision, interfaz ni actuacion. Finalmente, la seleccion de componentes por
-kurtosis es auditable y reproducible, pero no demuestra que todo componente excluido sea ocular o
-muscular; por ello se incluye la sensibilidad sin ICA y no se describe como identificacion clinica
-del artefacto.
+La pregunta respaldada es: bajo un protocolo congelado dentro de Peterson MI-vs-rest, ¿cómo se
+comparan CSP+LDA y cuatro decoders deep, y cuánto rendimiento aporta la augmentación temporal?

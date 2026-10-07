@@ -1,121 +1,87 @@
-# Especificacion del benchmark deep EEG
+# Especificación confirmatoria Peterson V10
 
 ## Pregunta y alcance
 
-El benchmark evalua cinco decoders deep bajo protocolos identicos y separa tres preguntas:
+El benchmark confirmatorio usa únicamente MI-OpenBCI/Peterson: diez participantes, 15 canales
+low-cost y clasificación de imaginación motora frente a reposo. Evalúa rendimiento intra-sujeto,
+robustez entre particiones y generalización a sujetos no observados. Souza2023 y el estudio de
+transferencia permanecen como análisis históricos separados; no forman parte de V10.
 
-1. Rendimiento calibrado dentro de sujeto y sesion.
-2. Transferencia entre sesiones del mismo sujeto.
-3. Transferencia a sujetos no observados cuando el dataset lo permite.
-
-MI-OpenBCI y Souza2023 son datasets low-cost primarios que se analizan por separado. El primero
-evalua imaginacion motora frente a reposo; el segundo evalua mano izquierda frente a derecha.
-Zhou2020 aporta una tarea research-grade comparable,
-right-hand motor imagery frente a rest, con siete sesiones. Tavakolan2017 aporta la misma
-comparacion right-hand frente a rest, cuatro sesiones y una cohorte de 12 sujetos con menor costo
-computacional. Las diferencias
-entre datasets se interpretan como validacion externa contextual, no como efectos causales del
-hardware.
+El estudio no identifica causalmente un efecto del costo del hardware ni demuestra generalización
+a otros datasets.
 
 ## Modelos
 
-- EEGNet
-- FBCNet
-- ShallowConvNet, implementado como `ShallowFBCSPNet`
-- EEGConformer
-- EEGInceptionMI
+- CSP+LDA.
+- EEGNet.
+- FBCNet.
+- ShallowConvNet, implementado como `ShallowFBCSPNet`.
+- EEGConformer.
 
-Las cinco implementaciones proceden de Braindecode 1.5.2. CSP, DeepConvNet y modelos caseros no
-forman parte del benchmark nuevo.
+Las cuatro redes proceden de Braindecode 1.5.2. CSP+LDA usa covarianzas OAS, seis filtros CSP y
+LDA con solver SVD. EEGInceptionMI, CNN2D, ATCNet y los modelos del estudio de transferencia no
+pertenecen a la matriz confirmatoria V10.
 
-Esta sustitucion del conjunto historico CSP/EEGNet/CNN2D/ShallowConvNet/ATCNet es una decision
-explicita del autor para responder la revision con decoders deep modernos y evitar que el nuevo
-paper mezcle clasificadores clasicos con redes neuronales. El handoff MICCAI se conserva como
-referencia metodologica, pero no define el conjunto final de modelos de esta revision.
+## Preprocesamiento común
 
-## Preprocesamiento comun
+- Banda inicial 1–40 Hz para ajustar ICA cuando corresponde.
+- Análisis primario sin eliminación de componentes ICA.
+- Sensibilidad exploratoria: FastICA ajustada solo en training, kurtosis mayor que 10 y máximo dos
+  componentes, sin selección manual.
+- Banda final 8–30 Hz y remuestreo a 128 Hz.
+- Trials Peterson de 4 s, equivalentes a 512 muestras.
+- Z-score por canal calculado solo en training y aplicado a test.
 
-- Banda inicial 1 a 40 Hz para ajustar ICA.
-- El analisis primario no elimina componentes ICA, porque el criterio de kurtosis no identifica de
-  forma fiable fisiologia ocular o muscular en este montaje.
-- Como sensibilidad exploratoria, FastICA se ajusta solo en training y selecciona componentes con
-  kurtosis mayor que 10, con un maximo de dos.
-- Banda final 8 a 30 Hz.
-- Remuestreo a 128 Hz.
-- Épocas fijadas por dataset: cuatro segundos (512 muestras) para MI-OpenBCI y Zhou2020, y tres
-  segundos (384 muestras) para Souza2023 y Tavakolan2017. En Souza2023, la ventana comienza en
-  `LeftExec` o `RightExec`; tres segundos evitan incluir el periodo `Resting` indicado por los EDF.
-  Todos los modelos reciben exactamente el mismo
-  soporte temporal dentro de cada dataset.
-- Z-score por canal calculado solo en training.
-- MOABB aplica la banda inicial 1-40 Hz durante la carga. El preprocesamiento registra ese origen
-  y no repite el mismo filtro; MI-OpenBCI y Souza2023 reciben la banda inicial dentro de cada fold.
-
-Cada fold de sensibilidad guarda convergencia, iteraciones, seed, kurtosis, candidatos y
-componentes excluidos. No existe seleccion manual. Esta condicion no se describe como
-identificacion ocular o muscular.
+Cada fold de sensibilidad conserva convergencia, iteraciones, seed, kurtosis y componentes
+excluidos. La regla no se interpreta como identificación fisiológica ocular o muscular.
 
 ## Protocolos
 
-- `within_split`: particion estratificada 70/30 dentro de cada sesion; es el baseline
-  within-session del perfil paper.
-- `within_session`: cinco folds estratificados dentro de cada sesion.
-- `cross_session`: leave-one-session-out dentro de cada sujeto.
-- `loso`: leave-one-subject-out, reservado para datasets con montaje compatible entre sujetos.
+- `within_split`: partición estratificada 70/30 dentro de participante.
+- `within_session`: cinco folds estratificados dentro de participante.
+- `loso`: leave-one-subject-out.
 
-La tabla primaria usa trials completos y sin sliding windows. La augmentacion es un experimento
-separado con cuatro condiciones aplicadas por igual a todos los modelos:
+La condición primaria usa seis ventanas solapadas de 2 s distribuidas sobre el trial completo. Las
+probabilidades de las ventanas se promedian para producir exactamente una predicción por trial.
+Los controles son:
 
-- `center_x2`: el crop central de dos segundos repetido dos veces para emparejar `nonoverlap`.
-- `nonoverlap`: dos ventanas no solapadas de dos segundos durante training.
-- `center_x6`: el crop central de dos segundos repetido seis veces para emparejar `overlap`.
-- `overlap`: seis ventanas solapadas de dos segundos durante training.
+- `full`: trial completo de 4 s, sin sliding window.
+- `center`: crop central de 2 s.
+- `center_x2`: el crop central repetido dos veces para emparejar `nonoverlap`.
+- `nonoverlap`: dos ventanas no solapadas de 2 s.
+- `center_x6`: el crop central repetido seis veces para emparejar `overlap`.
+- `overlap`: seis ventanas solapadas de 2 s.
 
-La evaluacion siempre permanece a nivel de trial.
-Cada pareja emparejada contiene el mismo número de ejemplos, batches por época y actualizaciones
-del optimizador. El análisis se detiene si esos conteos difieren.
+Las comparaciones `nonoverlap-center_x2` y `overlap-center_x6` aíslan diversidad temporal bajo el
+mismo número de ejemplos, batches por época y actualizaciones. El análisis se detiene si esos
+conteos difieren.
 
-## Calidad de señal
+## Entrenamiento, semillas y unidad estadística
 
-Antes del entrenamiento se registran proporción de valores finitos, varianza, desviación estándar,
-RMS, amplitud pico a pico, canales constantes o casi planos, alertas de amplitud relativa y
-conteos por clase y sesión. Las alertas no excluyen datos automáticamente. En los datasets de
-MOABB no se estima ruido de línea a partir de épocas ya filtradas a 1-40 Hz; se marca como no
-disponible.
+Las redes usan las semillas 0–4 y 300 épocas fijas. Las particiones se fijan con
+`split_seed=2026`; las semillas de modelo cambian inicialización y orden de batches, no train/test.
+CSP es determinista, pero se serializa en la misma cuadrícula para completar el diseño pareado y
+se marca `optimization_stochastic=false`.
 
-## Semillas y unidad estadistica
+Antes de cualquier inferencia, las semillas se promedian dentro de participante. El participante
+es la unidad estadística; ventanas, folds y semillas no se tratan como observaciones biológicas
+independientes.
 
-El perfil de paper usa las semillas 0, 1, 2, 3 y 4. Se conservan las predicciones de cada celda.
-Para comparar modelos, primero se promedian las semillas dentro de cada sujeto. El sujeto es la
-unidad estadistica y ninguna ventana, fold o semilla se trata como una observacion independiente.
-Las particiones se fijan con `split_seed=2026` para todos los modelos y repeticiones. Las cinco
-semillas modifican inicializacion y orden de batches, no la composicion de train y test; por ello la
-dispersion entre semillas estima variabilidad de optimizacion y no queda confundida con cambios de
-particion. FastICA usa una seed fija derivada de `split_seed`; tampoco se mezcla la aleatoriedad de
-la descomposicion ICA con la variabilidad del entrenamiento neural.
+## Hipótesis y estadística
 
-## Hipotesis y estadistica
+Métrica primaria: accuracy. Métrica secundaria: Cohen's kappa.
 
-Metrica primaria: accuracy. Metrica secundaria: Cohen's kappa.
+La familia confirmatoria contiene los diez pares de modelos dentro de cada protocolo y métrica en
+la condición `overlap`, sin ICA. Se usa Wilcoxon bilateral por participante, corrección de Holm y
+correlación rank-biserial pareada. Los intervalos del 95% para medias y diferencias pareadas usan
+la distribución t de Student, sin bootstrap. Friedman y los diagnósticos restantes son
+exploratorios.
 
-Dentro de cada familia dataset, protocolo y metrica se comparan los diez pares de modelos mediante
-Wilcoxon bilateral y correccion de Holm. Los intervalos del 95 por ciento para medias y diferencias
-pareadas usan la distribucion t de Student, sin bootstrap. La variabilidad entre sujetos y la
-variabilidad entre semillas se informan por separado. Cada contraste incluye la correlacion
-rank-biserial pareada, cuyo signo sigue la diferencia indicada en la tabla.
+## Criterios de cierre
 
-La augmentacion usa Wilcoxon pareado sobre deltas por sujeto promediados entre semillas. La familia
-de Holm contiene las comparaciones `nonoverlap-center_x2` y `overlap-center_x6` de los cinco
-modelos.
-
-## Criterios de cierre de feedback
-
-- Multisemilla: cerrado cuando existen cinco semillas completas por celda primaria.
-- Estadistica: cerrado cuando se generan tablas Wilcoxon-Holm e IC con sujeto como unidad.
-- Fairness: cerrado cuando todos los modelos reciben identico soporte temporal y augmentacion.
-- Cross-session: cerrado cuando Tavakolan2017 y Zhou2020 terminan leave-one-session-out.
-- ICA: parcialmente cerrado. El primario no usa ICA; la sensibilidad por kurtosis es auditable,
-  pero no identifica la fisiologia del componente.
-- Latencia: cerrado cuando todos los modelos se perfilan en el mismo dispositivo, input y batch.
-- Reproducibilidad: cerrado cuando manifest, versiones, configuracion y predicciones estan
-  disponibles en el repositorio o release.
+- Exactamente 3,250 celdas válidas y sin duplicados.
+- Cinco seeds completas por celda deep y marcador determinista en CSP.
+- 300 épocas registradas en cada fold deep.
+- Hashes de código, datos, entorno, receta y particiones presentes.
+- Tablas confirmatorias, sensibilidad de augmentación e ICA, calidad, latencia y figuras
+  generadas únicamente después del auditor de integridad.
