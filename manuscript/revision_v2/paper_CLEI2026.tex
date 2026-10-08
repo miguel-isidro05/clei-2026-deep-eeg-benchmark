@@ -1,0 +1,255 @@
+\documentclass[conference]{IEEEtran}
+
+\usepackage[utf8]{inputenc}
+\usepackage{amsmath,amssymb}
+\usepackage{booktabs}
+\usepackage{cite}
+\usepackage{graphicx}
+\usepackage{textcomp}
+
+\begin{document}
+
+\title{Multi-Seed Evaluation of Established Deep Neural Decoders on Low-Cost Motor-Imagery EEG}
+
+\author{
+\IEEEauthorblockN{Miguel Isidro Baez, Sharon Quispe Carhuapoma, Omar Perez Nestares,
+Valeria Rivera Angles}
+\IEEEauthorblockA{Universidad Peruana Cayetano Heredia, Universidad San Ignacio de Loyola,
+and Universidad de San Martin de Porres, Lima, Peru}
+}
+
+\maketitle
+
+\begin{abstract}
+This study evaluates five established deep neural decoders for binary motor-imagery-versus-rest
+classification on the MI-OpenBCI low-cost EEG dataset. EEGNet, FBCNet, ShallowConvNet,
+EEGConformer, and EEGInceptionMI are trained under fixed, auditable recipes and repeated with five
+optimization seeds. Participant-calibrated, five-fold within-session, and leave-one-subject-out
+protocols are reported separately. External validation uses the task-matched, multi-session
+Zhou2020 and Tavakolan2017 datasets, with leave-one-session-out evaluation. Model comparisons use
+participants as the statistical unit, two-sided paired Wilcoxon tests, Holm correction, confidence
+intervals, and paired rank-biserial effect sizes. The study is offline and does not estimate a
+causal effect of hardware cost or end-to-end BCI response time. Confirmatory numerical results will
+be inserted only after the complete five-seed experiment grid passes the prespecified integrity
+checks.
+\end{abstract}
+
+\begin{IEEEkeywords}
+motor imagery, electroencephalography, low-cost EEG, deep learning, cross-session evaluation,
+reproducibility
+\end{IEEEkeywords}
+
+\section{Introduction}
+
+Motor-imagery brain-computer interfaces decode changes in sensorimotor EEG associated with
+imagined movement. Most established decoders are evaluated on laboratory-grade recordings, while
+public low-cost datasets contain fewer participants and may have different noise characteristics.
+This study therefore asks a narrower question: how do five representative deep decoders behave on
+MI-OpenBCI under participant-calibrated and cross-participant protocols, and are the observed
+patterns consistent in task-matched research-grade datasets?
+
+The contribution is empirical. No new neural architecture is proposed. The study adds a
+predeclared multi-seed design, participant-level paired inference, task-matched cross-session
+validation, leakage checks, sample accounting, and a reproducible model-inference latency profile.
+Differences between datasets are reported separately because the acquisitions do not isolate
+hardware cost.
+
+\section{Methods}
+
+\subsection{Datasets}
+
+MI-OpenBCI is the low-cost primary dataset. It contains 10 available participants, 15 EEG channels,
+and a right-hand motor-imagery-versus-rest task acquired at 125 Hz. The original subject identifiers
+are retained; S01 and S11 are absent from the distributed dataset. Exact trials and class counts are
+generated from the loaded arrays rather than entered manually.
+
+External validation uses Zhou2020~\cite{zhou} and Tavakolan2017~\cite{tavakolan} through MOABB. Both contain the events
+\texttt{right\_hand} and \texttt{rest} and have repeated sessions. Zhou2020 contains 20 participants
+and seven sessions. Tavakolan2017 contains 12 participants and four sessions. BNCI2014\_001 is not
+part of the confirmatory profile because it does not contain a rest class; a binary left-versus-
+right reduction would answer a different task.
+
+\subsection{Preprocessing}
+
+Every fold applies the same preprocessing to all five models. Signals are resampled to 128 Hz and
+receive one 1--40 Hz filter, either in the MOABB loader or in the local preprocessing path, followed
+by the common 8--30 Hz filter. Per-channel mean and standard deviation are estimated only from the
+training partition. Primary analyses do not reject ICA components. MI-OpenBCI and Zhou2020 use
+four-second inputs (512 samples), whereas Tavakolan2017 uses its three-second imagery interval
+(384 samples). Within each dataset, all five decoders receive identical temporal support.
+
+An exploratory sensitivity analysis fits FastICA only on training data. Components with kurtosis
+greater than 10 are candidates and at most the two largest-kurtosis components are removed. The
+pipeline records convergence, iteration count, component kurtosis, candidates, and exclusions.
+This rule is not described as ocular or muscular component identification.
+
+\subsection{Decoders and training}
+
+The five decoders are EEGNet, FBCNet, ShallowConvNet implemented as Braindecode's
+ShallowFBCSPNet, EEGConformer, and EEGInceptionMI. Their architectures follow the original model
+reports~\cite{eegnet,fbcnet,shallow,conformer,eeginception}; the evaluated implementations come
+from Braindecode 1.5.2~\cite{braindecode}. FBCNet uses six internal subbands restricted to
+8--30 Hz. Table~\ref{tab:recipes} gives the frozen recipes. The held-out test partition is never
+used for hyperparameter or epoch selection.
+
+\begin{table}[t]
+\caption{Predeclared training recipes. Every model uses 300 fixed epochs, batch size 64,
+cosine annealing, and no early stopping.}
+\label{tab:recipes}
+\centering
+\begin{tabular}{lcc}
+\toprule
+Model & Optimizer & Learning rate \\
+\midrule
+EEGNet & AdamW & $6.25\times10^{-4}$ \\
+FBCNet & AdamW & $6.25\times10^{-4}$ \\
+ShallowConvNet & AdamW & $6.25\times10^{-4}$ \\
+EEGConformer & Adam & $5\times10^{-5}$ \\
+EEGInceptionMI & Adam & $1\times10^{-3}$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Each experiment is repeated with optimization seeds 0, 1, 2, 3, and 4. The split seed is fixed at
+2026. FastICA also uses a fixed seed derived from the split and fold. Consequently, dispersion over
+the five repetitions represents optimization variability rather than a mixture of changing data
+partitions and optimization.
+
+\subsection{Evaluation protocols}
+
+MI-OpenBCI uses three protocols that answer different questions: a stratified 70/30 held-out split
+within the only available session, stratified five-fold within-session evaluation, and
+leave-one-subject-out evaluation. LOSO measures transfer to an unseen participant within the same
+dataset and is not interpreted as population-level generalization.
+
+Zhou2020 and Tavakolan2017 use a stratified 70/30 split within each session and leave-one-session-
+out evaluation within each participant. MI-OpenBCI has one session and therefore cannot provide a
+cross-session result.
+
+The augmentation analysis is separate from the primary full-trial table. All five models receive
+the same two-second input under compute-matched training conditions: the center crop repeated twice
+versus two non-overlapping windows, and the center crop repeated six times versus six overlapping
+windows. Complete trials are split before segmentation. Test data produce one prediction per
+original trial, so windows are never treated as independent statistical observations.
+
+\subsection{Metrics and statistical analysis}
+
+Accuracy is the primary endpoint and Cohen's $\kappa$ is secondary. Cohen's $\kappa$ measures
+observed agreement corrected for agreement expected by chance. Other metrics are descriptive.
+
+The five optimization seeds are averaged within participant before inference. Each family is
+defined by dataset, task, protocol, input condition, ICA policy, and metric. The ten model pairs are
+compared using two-sided paired Wilcoxon tests followed by Holm correction. Tables include the mean
+and median paired difference, a 95\% Student-$t$ interval for the mean paired difference, and paired
+rank-biserial correlation. No Friedman test or bootstrap interval is used.
+
+The augmentation family contains the two predeclared compute-matched comparisons,
+non-overlapping minus repeated-center-two and overlapping minus repeated-center-six, for each of
+the five models. Inference is blocked if any expected cell, seed, participant cohort, code
+fingerprint, training recipe, environment identity, or data identity is inconsistent.
+
+\subsection{Signal-quality audit}
+
+Before training, the pipeline checks finite-sample proportion, variance, standard deviation,
+root-mean-square amplitude, peak-to-peak amplitude, class counts, session counts, constant or
+near-flat channels, and relative-amplitude alerts. These checks do not remove participants,
+channels, or trials automatically. Line-noise estimates are marked unavailable for MOABB epochs
+that have already passed through the loader's 1--40 Hz filter.
+
+\subsection{Latency scope}
+
+Latency is measured after warm-up using the same PyTorch backend, device, channel count, temporal
+length, and floating-point type for all models. Batch-one median and 95th percentile measure
+individual model-forward latency. Batch-64 values describe amortized throughput. The measurement
+excludes acquisition, window accumulation, transmission, preprocessing, user interface, and
+actuation. It is not end-to-end BCI response time.
+
+\section{Results}
+
+\input{generated_results.tex}
+
+\section{Discussion}
+
+The final discussion will distinguish the highest observed mean from statistically supported
+pairwise differences. It will report optimization variability separately from between-participant
+dispersion and will not treat five seeds as additional biological observations. Dataset-specific
+results will remain separate because Zhou2020 and Tavakolan2017 do not provide a matched causal
+comparison of low-cost and research-grade hardware.
+
+\section{Limitations}
+
+MI-OpenBCI contains 10 participants from one device and one session. External datasets add
+cross-session evidence but not a second low-cost acquisition or a controlled hardware comparison.
+The study is offline and does not measure information-transfer rate, false activations, calibration
+burden, user workload, energy, or clinical effectiveness. The ICA sensitivity is reproducible but
+does not assign physiological artifact labels. Model-forward latency does not represent complete
+system latency.
+
+\subsection{Ethics, data availability, and software}
+
+This work is a secondary analysis of public, de-identified datasets. No participants were
+recruited and no new EEG was recorded for this study. Ethical approval and consent for the
+original acquisitions are reported by the corresponding dataset publications. The benchmark code,
+environment specification, manifests, and derived results are available from the project
+repository. Raw EEG is not redistributed; users obtain MI-OpenBCI from its original distribution
+and Zhou2020 and Tavakolan2017 through MOABB under the terms attached to each dataset.
+
+\section{Conclusion}
+
+Conclusions about decoder ranking, augmentation, and cross-session robustness remain pending until
+the complete multi-seed results pass the prespecified integrity checks. The final text will be
+generated from those verified outputs and will not reuse the historical single-seed results.
+
+\begin{thebibliography}{00}
+
+\bibitem{moabb}
+V. Jayaram and A. Barachant, ``MOABB: trustworthy algorithm benchmarking for BCIs,''
+\emph{Journal of Neural Engineering}, vol. 15, no. 6, 2018.
+
+\bibitem{miopenbci}
+V. Peterson, C. Galv{\'a}n, H. Hern{\'a}ndez, M. P. Saavedra, and R. Spies,
+``A motor imagery vs. rest dataset with low-cost consumer grade EEG hardware,''
+\emph{Data in Brief}, vol. 42, 2022.
+
+\bibitem{eegnet}
+V. J. Lawhern \emph{et al.}, ``EEGNet: a compact convolutional network for EEG-based
+brain-computer interfaces,'' \emph{Journal of Neural Engineering}, vol. 15, no. 5, 2018.
+
+\bibitem{fbcnet}
+R. Mane, N. Robinson, A. P. Vinod, S.-W. Lee, and C. Guan,
+``A multi-view CNN with novel variance layer for motor imagery brain computer interface,''
+in \emph{Proc. IEEE EMBC}, pp. 2950--2953, 2020.
+
+\bibitem{shallow}
+R. T. Schirrmeister \emph{et al.}, ``Deep learning with convolutional neural networks for EEG
+decoding and visualization,'' \emph{Human Brain Mapping}, vol. 38, no. 11, 2017.
+
+\bibitem{conformer}
+Y. Song, Q. Zheng, B. Liu, and X. Gao, ``EEG Conformer: convolutional transformer for EEG decoding
+and visualization,'' \emph{IEEE Transactions on Neural Systems and Rehabilitation Engineering},
+vol. 31, 2023.
+
+\bibitem{eeginception}
+C. Zhang, Y.-K. Kim, and A. Eskandarian, ``EEG-Inception: an accurate and robust end-to-end
+neural network for EEG-based motor imagery classification,'' \emph{Journal of Neural Engineering},
+vol. 18, no. 4, Art. no. 046014, 2021.
+
+\bibitem{braindecode}
+B. Aristimunha \emph{et al.}, ``Braindecode: toolbox for decoding raw electrophysiological brain
+data with deep learning models,'' Zenodo, doi: 10.5281/zenodo.17699192.
+
+\bibitem{holm}
+S. Holm, ``A simple sequentially rejective multiple test procedure,''
+\emph{Scandinavian Journal of Statistics}, vol. 6, no. 2, 1979.
+
+\bibitem{zhou}
+Q. Zhou \emph{et al.}, ``Relative power correlates with the decoding performance of motor imagery
+both across time and subjects,'' \emph{Frontiers in Human Neuroscience}, vol. 15, 2021.
+
+\bibitem{tavakolan}
+M. Tavakolan, Z. Frehlick, X. Yong, and C. Menon, ``Classifying three imaginary states of the same
+upper extremity using time-domain features,'' \emph{PLOS ONE}, vol. 12, no. 3, 2017.
+
+\end{thebibliography}
+
+\end{document}

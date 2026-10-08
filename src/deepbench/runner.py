@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import importlib.metadata
 import json
 import platform
 import subprocess
@@ -12,20 +13,36 @@ from pathlib import Path
 
 import torch
 
-from .config import RESULTS_DIR, SPLIT_SEED
+from .config import RESULTS_DIR, SPLIT_SEED, is_classical_model
 from .datasets import available_subjects, load_subject
 from .evaluation import run_loso_cell, run_subject_cell
 from .io import read_json, write_json_atomic
 from .models import recipe_dict
 
-RUN_SCHEMA_VERSION = 1
+RUN_SCHEMA_VERSION = 3
+SCIENTIFIC_PACKAGES = (
+    "torch",
+    "braindecode",
+    "moabb",
+    "mne",
+    "numpy",
+    "scipy",
+    "scikit-learn",
+    "skorch",
+    "statsmodels",
+    "BCI2kReader",
+)
 
 
 @lru_cache(maxsize=1)
 def _code_fingerprint() -> str:
     digest = hashlib.sha256()
-    for path in sorted(Path(__file__).resolve().parent.glob("*.py")):
-        digest.update(path.name.encode())
+    root = Path(__file__).resolve().parents[2]
+    paths = list((root / "src" / "deepbench").glob("*.py"))
+    paths += list((root / "scripts").glob("*.py"))
+    paths += [root / "run_transfer_cayetano.sh"]
+    for path in sorted(path for path in paths if path.exists()):
+        digest.update(str(path.relative_to(root)).encode())
         digest.update(path.read_bytes())
     return digest.hexdigest()
 
@@ -52,6 +69,38 @@ def _hardware_identity(device: str) -> str:
     return platform.processor() or platform.machine()
 
 
+@lru_cache(maxsize=1)
+def _environment_identity() -> tuple[str, dict[str, str | None]]:
+    """Fingerprint versions that can change numerical results."""
+    versions: dict[str, str | None] = {"python": platform.python_version()}
+    for package in SCIENTIFIC_PACKAGES:
+        try:
+            distribution = importlib.metadata.distribution(package)
+            versions[package] = distribution.version
+            direct_url = distribution.read_text("direct_url.json")
+            versions[f"{package}_direct_url"] = (
+                json.dumps(json.loads(direct_url), sort_keys=True, separators=(",", ":"))
+                if direct_url
+                else None
+            )
+        except importlib.metadata.PackageNotFoundError:
+            versions[package] = None
+            versions[f"{package}_direct_url"] = None
+    canonical = json.dumps(versions, sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(canonical.encode()).hexdigest(), versions
+
+
+def _cohort_data_identity(recordings: dict[str, object]) -> str:
+    identities = {
+        subject: getattr(recording, "data_sha256", None)
+        for subject, recording in sorted(recordings.items())
+    }
+    if any(value is None for value in identities.values()):
+        raise ValueError("Every loaded recording must contain data_sha256")
+    canonical = json.dumps(identities, sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(canonical.encode()).hexdigest()
+
+
 def _run_identity(
     *,
     dataset: str,
@@ -64,6 +113,9 @@ def _run_identity(
     epochs: int,
     device: str,
     save_weights: bool,
+    data_sha256: str,
+    environment_sha256: str,
+    environment_versions: dict[str, str | None] | None = None,
 ) -> tuple[str, dict[str, object]]:
     configuration = {
         "schema_version": RUN_SCHEMA_VERSION,
@@ -81,11 +133,17 @@ def _run_identity(
         "device": device,
         "device_type": device.split(":", maxsplit=1)[0],
         "hardware": _hardware_identity(device),
-        "deterministic_policy": "torch_deterministic_warn_only_cudnn_deterministic",
+        "deterministic_policy": "torch_deterministic_strict_math_sdp_cudnn_deterministic",
+        "environment_sha256": environment_sha256,
+        "environment_versions": environment_versions,
+        "data_sha256": data_sha256,
         "save_weights": save_weights,
         "recipe": recipe_dict(model, epochs),
     }
-    canonical = json.dumps(configuration, sort_keys=True, separators=(",", ":"))
+    operational_configuration = {
+        key: value for key, value in configuration.items() if key != "git_revision"
+    }
+    canonical = json.dumps(operational_configuration, sort_keys=True, separators=(",", ":"))
     return hashlib.sha256(canonical.encode()).hexdigest(), configuration
 
 
@@ -131,6 +189,7 @@ def run_job(
     completed = 0
     skipped = 0
     checkpoint_dir = output_dir / "checkpoints" if save_weights else None
+    environment_sha256, environment_versions = _environment_identity()
     if "loso" in protocols:
         recordings = {subject: load_subject(dataset, subject) for subject in selected_subjects}
     else:
@@ -140,6 +199,17 @@ def run_job(
             for model in models:
                 for seed in seeds:
                     for subject in selected_subjects:
+                        if subject not in recordings:
+                            recordings[subject] = load_subject(dataset, subject)
+                        recording = recordings[subject]
+                        if protocol == "loso":
+                            data_sha256 = _cohort_data_identity(recordings)
+                        else:
+                            if recording.data_sha256 is None:
+                                raise ValueError(
+                                    f"{dataset}/{subject} does not provide a data fingerprint"
+                                )
+                            data_sha256 = recording.data_sha256
                         destination = cell_path(
                             output_dir,
                             dataset,
@@ -158,9 +228,12 @@ def run_job(
                             seed=seed,
                             subject=subject,
                             ica_policy=ica_policy,
-                            epochs=epochs,
-                            device=device,
+                            epochs=0 if is_classical_model(model) else epochs,
+                            device="cpu" if is_classical_model(model) else device,
                             save_weights=save_weights,
+                            data_sha256=data_sha256,
+                            environment_sha256=environment_sha256,
+                            environment_versions=environment_versions,
                         )
                         if destination.exists() and not overwrite:
                             previous = read_json(destination)
@@ -178,22 +251,19 @@ def run_job(
                                 subject,
                                 model,
                                 condition=condition,
-                                device=device,
+                                device="cpu" if is_classical_model(model) else device,
                                 seed=seed,
                                 epochs=epochs,
                                 ica_policy=ica_policy,
                                 checkpoint_dir=checkpoint_dir,
                             )
                         else:
-                            if subject not in recordings:
-                                recordings[subject] = load_subject(dataset, subject)
-                            recording = recordings[subject]
                             result = run_subject_cell(
                                 recording,
                                 model,
                                 protocol=protocol,
                                 condition=condition,
-                                device=device,
+                                device="cpu" if is_classical_model(model) else device,
                                 seed=seed,
                                 epochs=epochs,
                                 ica_policy=ica_policy,

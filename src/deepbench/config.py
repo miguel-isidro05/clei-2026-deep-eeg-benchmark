@@ -13,11 +13,34 @@ MODEL_NAMES: tuple[str, ...] = (
     "EEGConformer",
     "EEGInceptionMI",
 )
+CLASSICAL_MODEL_NAMES: tuple[str, ...] = ("CSP+LDA",)
+PETERSON_DEEP_MODEL_NAMES: tuple[str, ...] = (
+    "FBCNet",
+    "EEGNet",
+    "ShallowConvNet",
+    "EEGConformer",
+)
+PETERSON_MODEL_NAMES: tuple[str, ...] = (
+    *CLASSICAL_MODEL_NAMES,
+    *PETERSON_DEEP_MODEL_NAMES,
+)
+
+
+def is_classical_model(name: str) -> bool:
+    """Return whether a model uses the frozen non-neural estimator path."""
+    return name in CLASSICAL_MODEL_NAMES
+
+
 PAPER_SEEDS: tuple[int, ...] = (0, 1, 2, 3, 4)
+PAPER_EPOCHS = 300
+PAPER_PROFILE_VERSION = "clei2026-deep-v7"
+PETERSON_PROFILE_VERSION = "clei2026-peterson-journal-v10"
 SPLIT_SEED = 2026
 TARGET_SFREQ = 128.0
 TRIAL_SECONDS = 4.0
 TRIAL_SAMPLES = int(TARGET_SFREQ * TRIAL_SECONDS)
+SOUZA_TRIAL_SECONDS = 3.0
+SOUZA_TRIAL_SAMPLES = int(TARGET_SFREQ * SOUZA_TRIAL_SECONDS)
 AUGMENT_WINDOW_SAMPLES = int(TARGET_SFREQ * 2.0)
 AUGMENT_OVERLAP_STEP = 51
 
@@ -54,6 +77,26 @@ MI_SUBJECTS: tuple[str, ...] = (
     "S10",
     "S12",
 )
+SOUZA_PUBLISHED_SUBJECTS: tuple[str, ...] = ("001", "002", "003", "004", "005", "006")
+SOUZA_SUBJECTS: tuple[str, ...] = ("002", "003", "004", "005", "006")
+SOUZA_CHANNELS: tuple[str, ...] = (
+    "Fp1",
+    "Fz",
+    "C3",
+    "C4",
+    "T5",
+    "T6",
+    "Cz",
+    "Pz",
+    "F7",
+    "F8",
+    "F3",
+    "F4",
+    "T3",
+    "T4",
+    "P3",
+    "P4",
+)
 
 
 @dataclass(frozen=True)
@@ -76,12 +119,28 @@ DATASET_SPECS: dict[str, DatasetSpec] = {
         paper_role="low_cost_primary",
         multi_session=False,
     ),
+    "Souza2023": DatasetSpec(
+        name="Souza2023",
+        task="left_hand_vs_right_hand",
+        events=("left_hand", "right_hand"),
+        paper_role="low_cost_primary_left_right",
+        multi_session=True,
+        trial_seconds=SOUZA_TRIAL_SECONDS,
+    ),
     "Zhou2020": DatasetSpec(
         name="Zhou2020",
         task="right_hand_vs_rest",
         events=("rest", "right_hand"),
         paper_role="research_grade_task_matched",
         multi_session=True,
+    ),
+    "Tavakolan2017": DatasetSpec(
+        name="Tavakolan2017",
+        task="right_hand_vs_rest",
+        events=("rest", "right_hand"),
+        paper_role="research_grade_task_matched_compact",
+        multi_session=True,
+        trial_seconds=3.0,
     ),
     "BNCI2014_001": DatasetSpec(
         name="BNCI2014_001",
@@ -106,6 +165,7 @@ def resolve_mi_data_dir() -> Path:
     if value := os.getenv("CLEI_DATA_DIR"):
         return Path(value).expanduser().resolve()
     candidates = (
+        BENCH_ROOT / "data" / "mi-openbci",
         WORKSPACE_ROOT / "Code_before" / "DDPM_CLI2026" / "Database-MIOpenBCI-main",
         WORKSPACE_ROOT
         / "ARCHIVE"
@@ -118,3 +178,10 @@ def resolve_mi_data_dir() -> Path:
         if candidate.exists():
             return candidate
     raise FileNotFoundError("Set CLEI_DATA_DIR to the folder containing S02.mat ... S12.mat")
+
+
+def resolve_souza_data_dir() -> Path:
+    """Locate the local Souza2023 EDF files."""
+    if value := os.getenv("SOUZA_DATA_DIR"):
+        return Path(value).expanduser().resolve()
+    return BENCH_ROOT / "data" / "souza2023"

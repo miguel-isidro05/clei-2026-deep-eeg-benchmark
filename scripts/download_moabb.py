@@ -5,14 +5,16 @@ from __future__ import annotations
 
 import argparse
 
+from deepbench.config import DATASET_SPECS
 from deepbench.datasets import download_moabb_dataset
 
 
 def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument(
-        "--datasets", nargs="+", choices=("AlexMI", "Zhou2020", "BNCI2014_001"), required=True
+    moabb_datasets = tuple(
+        name for name in DATASET_SPECS if name not in {"MI-OpenBCI", "Souza2023"}
     )
+    parser.add_argument("--datasets", nargs="+", choices=moabb_datasets, required=True)
     parser.add_argument("--subjects", nargs="+")
     args = parser.parse_args()
     for dataset in args.datasets:

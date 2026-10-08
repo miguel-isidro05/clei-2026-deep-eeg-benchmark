@@ -6,9 +6,10 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
-from deepbench.config import MODEL_NAMES, PAPER_SEEDS, RESULTS_DIR
+from deepbench.config import MODEL_NAMES, PAPER_EPOCHS, PAPER_SEEDS, RESULTS_DIR
 from deepbench.datasets import available_subjects
 from deepbench.io import write_json_atomic
+from deepbench.paper_profile import paper_blocks, paper_profile_metadata
 from deepbench.reproducibility import configure_determinism, get_device, write_manifest
 from deepbench.runner import cell_path, run_job
 
@@ -16,10 +17,12 @@ from deepbench.runner import cell_path, run_job
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
     parser.add_argument(
-        "--phase", choices=("primary", "external", "ica-sensitivity", "all"), default="all"
+        "--phase",
+        choices=("peterson", "souza", "primary", "ica-sensitivity", "no-loso", "all"),
+        default="all",
     )
     parser.add_argument("--device", default=get_device())
-    parser.add_argument("--epochs", type=int, default=300)
+    parser.add_argument("--epochs", type=int, default=PAPER_EPOCHS)
     parser.add_argument("--output-dir", type=Path, default=RESULTS_DIR)
     parser.add_argument("--save-weights", action="store_true")
     parser.add_argument("--plan-only", action="store_true")
@@ -31,12 +34,22 @@ def parse_args() -> argparse.Namespace:
 def main() -> None:
     args = parse_args()
     configure_determinism()
+    if args.epochs != PAPER_EPOCHS:
+        raise SystemExit(
+            f"The confirmatory paper profile is frozen at {PAPER_EPOCHS} epochs; "
+            "use scripts/run_experiments.py for pilots."
+        )
     if args.num_shards < 1 or not 0 <= args.shard_index < args.num_shards:
         raise SystemExit("Require num_shards >= 1 and 0 <= shard_index < num_shards")
-    if args.num_shards > 1 and args.phase in {"primary", "all"}:
+    if args.num_shards > 1 and args.phase in {
+        "peterson",
+        "souza",
+        "primary",
+        "all",
+    }:
         raise SystemExit(
             "Subject sharding is disabled for the primary phase because LOSO requires the full "
-            "training cohort. Shard only external or ica-sensitivity."
+            "training cohort. Shard only ica-sensitivity."
         )
     write_manifest(
         args.output_dir
@@ -66,43 +79,7 @@ def main() -> None:
         "overwrite": False,
         "save_weights": args.save_weights,
     }
-    blocks: list[dict[str, object]] = []
-    if args.phase in {"primary", "all"}:
-        blocks.extend(
-            [
-                {
-                    "dataset": "MI-OpenBCI",
-                    "protocols": ["within_split", "loso"],
-                    "conditions": ["full"],
-                    "ica_policy": "none",
-                },
-                {
-                    "dataset": "MI-OpenBCI",
-                    "protocols": ["within_split"],
-                    "conditions": ["center", "nonoverlap", "overlap"],
-                    "ica_policy": "none",
-                },
-            ]
-        )
-    if args.phase in {"external", "all"}:
-        blocks.extend(
-            {
-                "dataset": dataset,
-                "protocols": ["within_split", "cross_session"],
-                "conditions": ["full"],
-                "ica_policy": "none",
-            }
-            for dataset in ("Zhou2020", "BNCI2014_001")
-        )
-    if args.phase in {"ica-sensitivity", "all"}:
-        blocks.append(
-            {
-                "dataset": "MI-OpenBCI",
-                "protocols": ["within_split"],
-                "conditions": ["full"],
-                "ica_policy": "kurtosis",
-            }
-        )
+    blocks = paper_blocks(args.phase)
     expected_cells = []
     selected_subjects: dict[str, list[str]] = {}
     all_subjects: dict[str, list[str]] = {}
@@ -135,6 +112,7 @@ def main() -> None:
         / "manifests"
         / (f"paper-expected-{args.phase}-shard{args.shard_index}-of-{args.num_shards}.json"),
         {
+            **paper_profile_metadata(args.phase),
             "phase": args.phase,
             "shard_index": args.shard_index,
             "num_shards": args.num_shards,

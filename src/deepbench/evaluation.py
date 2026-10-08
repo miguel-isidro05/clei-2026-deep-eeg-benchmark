@@ -9,16 +9,47 @@ import numpy as np
 import torch
 from sklearn.model_selection import StratifiedKFold, StratifiedShuffleSplit
 
-from .config import SPLIT_SEED
+from .classical import make_csp_lda
+from .classical import predict_trial_scores as predict_classical_trial_scores
+from .config import SPLIT_SEED, is_classical_model
 from .io import read_json, write_json_atomic
 from .metrics import compute_metrics
 from .models import make_classifier, predict_scores, recipe_dict
-from .preprocessing import augment_training, prepare_test_input, preprocess_split
+from .preprocessing import (
+    aggregate_window_scores,
+    augment_training,
+    prepare_test_windows,
+    preprocess_split,
+)
 from .types import CellResult, SubjectRecording
 
 
 def _index_hash(indices: np.ndarray) -> str:
     return hashlib.sha256(np.asarray(indices, dtype=np.int64).tobytes()).hexdigest()
+
+
+def _array_hash(array: np.ndarray) -> str:
+    contiguous = np.ascontiguousarray(array)
+    digest = hashlib.sha256()
+    digest.update(str(contiguous.shape).encode())
+    digest.update(str(contiguous.dtype).encode())
+    digest.update(contiguous.tobytes())
+    return digest.hexdigest()
+
+
+def _class_counts(labels: np.ndarray) -> dict[str, int]:
+    return {str(label): int(np.sum(labels == label)) for label in (0, 1)}
+
+
+def _predict_trial_scores(
+    classifier,
+    x: np.ndarray,
+    condition: str,
+) -> tuple[np.ndarray, np.ndarray, int]:
+    """Predict windows and return one averaged probability per original trial."""
+    windows, trial_indices = prepare_test_windows(x, condition)
+    _, window_scores = predict_scores(classifier, windows)
+    return aggregate_window_scores(window_scores, trial_indices, n_trials=len(x))
 
 
 def _protocol_splits(
@@ -117,37 +148,48 @@ def _fit_fold(
         ch_names=recording.ch_names,
         seed=ica_seed,
         ica_policy=ica_policy,
+        loader_bandpass_hz=recording.loader_bandpass_hz,
     )
     x_train, y_train = augment_training(processed.x_train, recording.y[train_indices], condition)
-    x_test = prepare_test_input(processed.x_test, condition)
-    classifier = make_classifier(
-        model,
-        n_chans=x_train.shape[1],
-        n_times=x_train.shape[-1],
-        sfreq=recording.sfreq,
-        device=device,
-        seed=model_seed,
-        epochs=epochs,
-    )
-    classifier.fit(x_train, y_train)
-    if not classifier.history or int(classifier.history[-1, "train_batch_count"]) < 1:
-        raise RuntimeError("Training completed without processing any batches")
-    losses = np.asarray([row["train_loss"] for row in classifier.history], dtype=float)
-    if not np.isfinite(losses).all():
-        raise RuntimeError("Training produced a non-finite loss")
-    y_pred, y_score = predict_scores(classifier, x_test)
-    training_history = [
-        {
-            "epoch": int(index + 1),
-            "train_loss": float(row["train_loss"]),
-            "duration_seconds": float(row["dur"]),
-            "train_batch_count": int(row["train_batch_count"]),
-            "learning_rate": float(row["event_lr"]),
-        }
-        for index, row in enumerate(classifier.history)
-        if all(key in row for key in ("train_loss", "dur", "train_batch_count", "event_lr"))
-    ]
-    if checkpoint_path is not None:
+    x_test_windows, _ = prepare_test_windows(processed.x_test, condition)
+    if is_classical_model(model):
+        classifier = make_csp_lda()
+        classifier.fit(x_train, y_train)
+        y_pred, y_score, test_windows_per_trial = predict_classical_trial_scores(
+            classifier, processed.x_test, condition
+        )
+        training_history: list[dict[str, object]] = []
+    else:
+        classifier = make_classifier(
+            model,
+            n_chans=x_train.shape[1],
+            n_times=x_train.shape[-1],
+            sfreq=recording.sfreq,
+            device=device,
+            seed=model_seed,
+            epochs=epochs,
+        )
+        classifier.fit(x_train, y_train)
+        if not classifier.history or int(classifier.history[-1, "train_batch_count"]) < 1:
+            raise RuntimeError("Training completed without processing any batches")
+        losses = np.asarray([row["train_loss"] for row in classifier.history], dtype=float)
+        if not np.isfinite(losses).all():
+            raise RuntimeError("Training produced a non-finite loss")
+        y_pred, y_score, test_windows_per_trial = _predict_trial_scores(
+            classifier, processed.x_test, condition
+        )
+        training_history = [
+            {
+                "epoch": int(index + 1),
+                "train_loss": float(row["train_loss"]),
+                "duration_seconds": float(row["dur"]),
+                "train_batch_count": int(row["train_batch_count"]),
+                "learning_rate": float(row["event_lr"]),
+            }
+            for index, row in enumerate(classifier.history)
+            if all(key in row for key in ("train_loss", "dur", "train_batch_count", "event_lr"))
+        ]
+    if checkpoint_path is not None and not is_classical_model(model):
         _save_checkpoint(
             classifier,
             checkpoint_path,
@@ -163,10 +205,18 @@ def _fit_fold(
         **processed.report,
         "train_index_sha256": _index_hash(train_indices),
         "test_index_sha256": _index_hash(test_indices),
+        "model_train_input_sha256": _array_hash(x_train),
+        "model_test_input_sha256": _array_hash(x_test_windows),
         "n_train_trials": int(len(train_indices)),
         "n_train_examples": int(len(x_train)),
         "n_test_trials": int(len(test_indices)),
+        "n_test_windows": int(len(x_test_windows)),
+        "test_windows_per_trial": test_windows_per_trial,
+        "test_aggregation": "mean_class_1_probability_by_trial",
+        "train_class_counts": _class_counts(recording.y[train_indices]),
+        "test_class_counts": _class_counts(recording.y[test_indices]),
         "training_history": training_history,
+        "estimator_family": "classical" if is_classical_model(model) else "deep_learning",
     }
     return recording.y[test_indices], y_pred, y_score, len(x_train), report
 

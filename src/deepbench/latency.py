@@ -2,13 +2,20 @@
 
 from __future__ import annotations
 
+import hashlib
 import platform
 import time
+from pathlib import Path
 
 import numpy as np
 import torch
 
 from .models import make_module, parameter_count
+
+
+def latency_code_sha256() -> str:
+    """Fingerprint the model-forward latency implementation."""
+    return hashlib.sha256(Path(__file__).read_bytes()).hexdigest()
 
 
 def latency_environment(device: str) -> dict[str, object]:
@@ -80,8 +87,12 @@ def profile_model(
         "timed_iterations": iterations,
         "median_batch_ms": float(np.median(values)),
         "p95_batch_ms": float(np.percentile(values, 95)),
-        "amortized_median_ms_per_trial": float(np.median(values) / batch_size),
-        "individual_latency_ms": float(np.median(values)) if batch_size == 1 else None,
+        "amortized_median_ms_per_model_input": float(np.median(values) / batch_size),
+        "individual_model_input_ms": float(np.median(values)) if batch_size == 1 else None,
+        "measurement_unit": "model_input_epoch_or_window",
         "parameters": parameter_count(name, n_chans, n_times, sfreq),
-        "scope": "model_forward_only_excludes_acquisition_buffering_and_preprocessing",
+        "scope": (
+            "model_forward_only_excludes_window_generation_probability_aggregation_"
+            "acquisition_buffering_and_preprocessing_not_online_latency"
+        ),
     }

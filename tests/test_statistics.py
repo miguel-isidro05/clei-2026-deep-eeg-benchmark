@@ -4,13 +4,16 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from deepbench.config import MODEL_NAMES
+from deepbench.config import MODEL_NAMES, PAPER_EPOCHS
 from deepbench.statistics import (
     aggregate_seeds,
     completeness_table,
     load_cells,
     mean_ci,
     paired_model_tests,
+    paired_rank_biserial,
+    sample_accounting_table,
+    validate_matched_augmentation_compute,
     write_statistics,
 )
 
@@ -46,6 +49,7 @@ def test_seed_repeats_are_averaged_before_inference() -> None:
     assert len(tests) == 10
     assert set(tests["n_subjects"]) == {8}
     assert tests["p_holm"].between(0, 1).all()
+    assert tests["rank_biserial_a_minus_b"].between(-1, 1).all()
 
 
 def test_completeness_reports_missing_seed() -> None:
@@ -61,6 +65,151 @@ def test_student_t_confidence_interval_contains_mean() -> None:
     mean, low, high = mean_ci(np.array([0.1, 0.2, 0.3, 0.4]))
     assert low < mean < high
     assert np.isclose(mean, 0.25)
+
+
+def test_paired_rank_biserial_keeps_difference_direction() -> None:
+    assert paired_rank_biserial(np.array([1.0, 2.0, 3.0])) == pytest.approx(1.0)
+    assert paired_rank_biserial(np.array([-1.0, -2.0, -3.0])) == pytest.approx(-1.0)
+    assert paired_rank_biserial(np.zeros(3)) == pytest.approx(0.0)
+
+
+def test_sample_accounting_exports_fold_class_counts() -> None:
+    payloads = [
+        {
+            "dataset": "D",
+            "task": "binary",
+            "protocol": "within_split",
+            "condition": "overlap",
+            "ica_policy": "none",
+            "model": "EEGNet",
+            "subject": "1",
+            "seed": 0,
+            "fold_reports": [
+                {
+                    "session": "session_0",
+                    "fold": 0,
+                    "n_train_trials": 10,
+                    "n_train_examples": 60,
+                    "n_test_trials": 4,
+                    "train_class_counts": {"0": 5, "1": 5},
+                    "test_class_counts": {"0": 2, "1": 2},
+                    "training_history": [
+                        {"train_batch_count": 2},
+                        {"train_batch_count": 2},
+                    ],
+                }
+            ],
+        }
+    ]
+    table = sample_accounting_table(payloads)
+    assert len(table) == 1
+    assert table.iloc[0]["n_train_examples"] == 60
+    assert table.iloc[0]["train_class_0"] == 5
+    assert table.iloc[0]["train_class_1"] == 5
+    assert table.iloc[0]["test_class_0"] == 2
+    assert table.iloc[0]["test_class_1"] == 2
+    assert table.iloc[0]["optimizer_updates"] == 4
+
+
+def test_compute_matched_augmentation_rejects_unequal_updates() -> None:
+    def payload(condition: str, examples: int, batches: int) -> dict[str, object]:
+        return {
+            "dataset": "D",
+            "protocol": "within_split",
+            "ica_policy": "none",
+            "model": "EEGNet",
+            "subject": "1",
+            "seed": 0,
+            "condition": condition,
+            "fold_reports": [
+                {
+                    "n_train_examples": examples,
+                    "training_history": [{"train_batch_count": batches}],
+                }
+            ],
+        }
+
+    validate_matched_augmentation_compute(
+        [payload("center_x2", 20, 2), payload("nonoverlap", 20, 2)]
+    )
+    with pytest.raises(ValueError, match="Compute mismatch"):
+        validate_matched_augmentation_compute(
+            [payload("center_x6", 60, 6), payload("overlap", 60, 7)]
+        )
+    with pytest.raises(ValueError, match="Compute mismatch"):
+        validate_matched_augmentation_compute(
+            [
+                {
+                    **payload("center_x2", 20, 2),
+                    "fold_reports": [
+                        {
+                            "n_train_examples": 20,
+                            "training_history": [
+                                {"train_batch_count": 2},
+                                {"train_batch_count": 3},
+                            ],
+                        }
+                    ],
+                },
+                {
+                    **payload("nonoverlap", 20, 2),
+                    "fold_reports": [
+                        {
+                            "n_train_examples": 20,
+                            "training_history": [
+                                {"train_batch_count": 3},
+                                {"train_batch_count": 2},
+                            ],
+                        }
+                    ],
+                },
+            ]
+        )
+
+
+def test_strict_compute_audit_ignores_overlap_outside_within_split() -> None:
+    payload = {
+        "dataset": "MI-OpenBCI",
+        "protocol": "loso",
+        "ica_policy": "none",
+        "model": "EEGNet",
+        "subject": "S02",
+        "seed": 0,
+        "condition": "overlap",
+        "fold_reports": [
+            {
+                "n_train_examples": 600,
+                "training_history": [
+                    {"train_batch_count": 10} for _ in range(PAPER_EPOCHS)
+                ],
+            }
+        ],
+    }
+
+    validate_matched_augmentation_compute([payload], strict=True)
+
+
+def test_strict_compute_audit_requires_declared_pair_within_split() -> None:
+    payload = {
+        "dataset": "MI-OpenBCI",
+        "protocol": "within_split",
+        "ica_policy": "none",
+        "model": "EEGNet",
+        "subject": "S02",
+        "seed": 0,
+        "condition": "overlap",
+        "fold_reports": [
+            {
+                "n_train_examples": 600,
+                "training_history": [
+                    {"train_batch_count": 10} for _ in range(PAPER_EPOCHS)
+                ],
+            }
+        ],
+    }
+
+    with pytest.raises(ValueError, match="missing.*center_x6"):
+        validate_matched_augmentation_compute([payload], strict=True)
 
 
 def test_paired_models_require_identical_subject_cohorts() -> None:
@@ -91,6 +240,9 @@ def test_incomplete_seed_grid_blocks_inferential_outputs(tmp_path) -> None:
             "device_type": "cuda",
             "hardware": "GPU",
             "deterministic_policy": "torch_deterministic_warn_only_cudnn_deterministic",
+            "environment_sha256": "env-a",
+            "environment_versions": {"python": "3.11"},
+            "data_sha256": "data-a",
             "recipe": {"optimizer": "adamw"},
         },
     }
@@ -106,6 +258,51 @@ def test_incomplete_seed_grid_blocks_inferential_outputs(tmp_path) -> None:
     write_statistics(cells, exploratory, (0, 1), allow_incomplete=True)
     assert (exploratory / "INCOMPLETE_EXPLORATORY_ONLY.txt").exists()
     assert not (exploratory / "paired_wilcoxon_holm.csv").exists()
+
+    payload["seed"] = 1
+    (cells / "cell-seed-1.json").write_text(json.dumps(payload), encoding="utf-8")
+    write_statistics(cells, exploratory, (0, 1))
+    assert not (exploratory / "INCOMPLETE_EXPLORATORY_ONLY.txt").exists()
+    assert (exploratory / "paired_wilcoxon_holm.csv").exists()
+
+
+def test_accuracy_statistics_allow_model_specific_training_backends(tmp_path) -> None:
+    cells = tmp_path / "cells"
+    cells.mkdir()
+    import json
+
+    for model, epochs, device_type, hardware in (
+        ("CSP+LDA", 0, "cpu", "CPU"),
+        ("EEGNet", 300, "cuda", "GPU"),
+    ):
+        payload = {
+            "dataset": "D",
+            "task": "binary",
+            "protocol": "within_split",
+            "condition": "full",
+            "ica_policy": "none",
+            "model": model,
+            "subject": "1",
+            "seed": 0,
+            "metrics": {"accuracy": 0.5, "kappa": 0.0},
+            "run_configuration": {
+                "schema_version": 3,
+                "code_sha256": "abc",
+                "epochs": epochs,
+                "split_seed": 2026,
+                "device_type": device_type,
+                "hardware": hardware,
+                "deterministic_policy": "fixed",
+                "environment_sha256": "env-a",
+                "environment_versions": {"python": "3.11"},
+                "data_sha256": "data-a",
+                "recipe": {"estimator": model},
+            },
+        }
+        (cells / f"{model}.json").write_text(json.dumps(payload), encoding="utf-8")
+
+    loaded = load_cells(cells)
+    assert set(loaded["model"]) == {"CSP+LDA", "EEGNet"}
 
 
 def test_missing_expected_group_forces_exploratory_outputs(tmp_path) -> None:
@@ -132,6 +329,9 @@ def test_missing_expected_group_forces_exploratory_outputs(tmp_path) -> None:
                 "device_type": "cuda",
                 "hardware": "GPU",
                 "deterministic_policy": "torch_deterministic_warn_only_cudnn_deterministic",
+                "environment_sha256": "env-a",
+                "environment_versions": {"python": "3.11"},
+                "data_sha256": "data-a",
                 "recipe": {"optimizer": "adamw"},
             },
         }
@@ -154,6 +354,47 @@ def test_malformed_cell_is_not_silently_ignored(tmp_path) -> None:
     (cells / "bad.json").write_text("{}", encoding="utf-8")
     with pytest.raises(ValueError, match="Malformed result cell"):
         load_cells(cells)
+
+
+def test_nonfinite_metric_is_rejected_before_inference(tmp_path) -> None:
+    import json
+
+    cells = tmp_path / "cells"
+    cells.mkdir()
+    payload = {
+        "dataset": "D",
+        "task": "binary",
+        "protocol": "within_split",
+        "condition": "full",
+        "ica_policy": "none",
+        "model": "EEGNet",
+        "subject": "1",
+        "seed": 0,
+        "metrics": {"accuracy": float("nan"), "kappa": 0.0},
+        "run_configuration": {
+            "schema_version": 2,
+            "code_sha256": "abc",
+            "epochs": 300,
+            "split_seed": 2026,
+            "device_type": "cuda",
+            "hardware": "GPU",
+            "deterministic_policy": "torch_deterministic_warn_only_cudnn_deterministic",
+            "environment_sha256": "env-a",
+            "environment_versions": {"python": "3.11"},
+            "data_sha256": "data-a",
+            "recipe": {"optimizer": "adamw"},
+        },
+    }
+    (cells / "nan.json").write_text(json.dumps(payload), encoding="utf-8")
+    with pytest.raises(ValueError, match="Non-finite metric"):
+        load_cells(cells)
+
+
+def test_paired_model_tests_reject_nonfinite_values() -> None:
+    frame = _frame()
+    frame.loc[frame.index[0], "value"] = np.nan
+    with pytest.raises(ValueError, match="Non-finite metric"):
+        paired_model_tests(frame)
 
 
 def test_mixed_code_versions_across_subjects_block_analysis(tmp_path) -> None:
@@ -179,6 +420,9 @@ def test_mixed_code_versions_across_subjects_block_analysis(tmp_path) -> None:
             "device_type": "cuda",
             "hardware": "GPU",
             "deterministic_policy": "torch_deterministic_warn_only_cudnn_deterministic",
+            "environment_sha256": "env-a",
+            "environment_versions": {"python": "3.11"},
+            "data_sha256": "data-a",
             "recipe": {"optimizer": "adamw"},
         },
     }

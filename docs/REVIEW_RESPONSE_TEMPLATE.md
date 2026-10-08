@@ -18,14 +18,15 @@ confirmen que no falta ninguna celda.
 > tests. The five models yield ten pairwise comparisons within each dataset, protocol, condition,
 > ICA policy, and metric family. Holm correction is applied within each family. Accuracy is the
 > primary metric and Cohen's kappa is secondary. Confidence intervals for subject means and paired
-> mean differences use the Student t distribution; no bootstrap or Friedman test is used.
+> mean differences use the Student t distribution; no bootstrap or Friedman test is used. We also
+> report paired rank-biserial correlation with the sign defined as model A minus model B.
 
 ## Cross-session y MOABB
 
-> We added leave-one-session-out evaluation on Zhou2020 and BNCI2014_001 (BCI Competition IV 2a).
-> Zhou2020 provides a task-matched right-hand-versus-rest external dataset, whereas BNCI2014_001
-> provides a canonical left-versus-right motor-imagery benchmark. We report these datasets
-> separately and do not interpret their differences as causal effects of low-cost hardware.
+> We added leave-one-session-out evaluation on Zhou2020 and Tavakolan2017. Both provide the same
+> right-hand-versus-rest contrast used for external validation, with seven and four sessions,
+> respectively. We report each dataset separately and do not interpret differences from
+> MI-OpenBCI as causal effects of hardware cost.
 
 ## Identificacion de componentes ICA
 

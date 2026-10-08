@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import itertools
 import json
 from pathlib import Path
@@ -10,6 +11,8 @@ import numpy as np
 import pandas as pd
 import scipy.stats
 from statsmodels.stats.multitest import multipletests
+
+from .config import PAPER_EPOCHS, is_classical_model
 
 CELL_KEYS = [
     "dataset",
@@ -27,17 +30,20 @@ MIN_PAIRED_SUBJECTS = 5
 GLOBAL_COMPATIBILITY_KEYS = (
     "schema_version",
     "code_sha256",
-    "epochs",
     "split_seed",
-    "device_type",
-    "hardware",
-    "deterministic_policy",
+    "environment_sha256",
 )
+
+
+def statistics_code_sha256() -> str:
+    """Fingerprint the implementation that produces inferential tables."""
+    return hashlib.sha256(Path(__file__).read_bytes()).hexdigest()
 
 
 def _validate_run_configurations(payloads: list[dict[str, object]]) -> None:
     global_signatures: set[tuple[object, ...]] = set()
-    recipes_by_model: dict[str, set[str]] = {}
+    recipes_by_model: dict[str, set[tuple[object, ...]]] = {}
+    data_by_subject: dict[tuple[str, str, str], set[str]] = {}
     for payload in payloads:
         configuration = payload.get("run_configuration")
         if not isinstance(configuration, dict):
@@ -45,18 +51,30 @@ def _validate_run_configurations(payloads: list[dict[str, object]]) -> None:
         missing = [key for key in GLOBAL_COMPATIBILITY_KEYS if key not in configuration]
         if missing:
             raise ValueError(f"run_configuration is missing compatibility fields: {missing}")
+        if not configuration.get("data_sha256"):
+            raise ValueError("run_configuration is missing data_sha256")
+        if not isinstance(configuration.get("environment_versions"), dict):
+            raise ValueError("run_configuration is missing environment_versions")
         global_signatures.add(tuple(configuration[key] for key in GLOBAL_COMPATIBILITY_KEYS))
         model = str(payload["model"])
-        recipe = json.dumps(configuration.get("recipe"), sort_keys=True)
-        recipes_by_model.setdefault(model, set()).add(recipe)
-    if len(global_signatures) != 1:
-        raise ValueError(
-            "Incompatible result cells: code, epochs, split seed, hardware, device type, or "
-            "deterministic policy differs"
+        model_signature = (
+            configuration.get("epochs"),
+            configuration.get("device_type"),
+            configuration.get("hardware"),
+            configuration.get("deterministic_policy"),
+            json.dumps(configuration.get("recipe"), sort_keys=True),
         )
+        recipes_by_model.setdefault(model, set()).add(model_signature)
+        data_key = (str(payload["dataset"]), str(payload["protocol"]), str(payload["subject"]))
+        data_by_subject.setdefault(data_key, set()).add(str(configuration.get("data_sha256")))
+    if len(global_signatures) != 1:
+        raise ValueError("Incompatible result cells: code, split seed, or environment differs")
     inconsistent_models = [model for model, recipes in recipes_by_model.items() if len(recipes) > 1]
     if inconsistent_models:
         raise ValueError(f"Incompatible training recipes for models: {inconsistent_models}")
+    inconsistent_data = [key for key, identities in data_by_subject.items() if len(identities) > 1]
+    if inconsistent_data:
+        raise ValueError(f"Incompatible data identities for cells: {inconsistent_data}")
 
 
 def load_cells(cells_dir: Path) -> pd.DataFrame:
@@ -69,11 +87,14 @@ def load_cells(cells_dir: Path) -> pd.DataFrame:
             raise ValueError(f"Malformed result cell: {path}")
         payloads.append(payload)
         for metric, value in payload["metrics"].items():
+            numeric_value = float(value)
+            if not np.isfinite(numeric_value):
+                raise ValueError(f"Non-finite metric {metric!r} in result cell: {path}")
             rows.append(
                 {
                     **{key: payload[key] for key in CELL_KEYS},
                     "metric": str(metric),
-                    "value": float(value),
+                    "value": numeric_value,
                     "source": str(path),
                 }
             )
@@ -105,9 +126,11 @@ def mean_ci(values: np.ndarray, confidence: float = 0.95) -> tuple[float, float,
 
 def _wilcoxon_pvalue(differences: np.ndarray) -> float:
     differences = np.asarray(differences, dtype=float)
+    if not np.isfinite(differences).all():
+        raise ValueError("Non-finite metric difference passed to paired Wilcoxon test")
     if np.allclose(differences, 0.0):
         return 1.0
-    return float(
+    p_value = float(
         scipy.stats.wilcoxon(
             differences,
             alternative="two-sided",
@@ -115,10 +138,39 @@ def _wilcoxon_pvalue(differences: np.ndarray) -> float:
             method="auto",
         ).pvalue
     )
+    if not np.isfinite(p_value) or not 0.0 <= p_value <= 1.0:
+        raise ValueError(f"Invalid Wilcoxon p-value: {p_value}")
+    return p_value
+
+
+def _holm_adjust(records: list[dict[str, object]]) -> None:
+    p_values = np.asarray([record["p_raw"] for record in records], dtype=float)
+    if not np.isfinite(p_values).all() or np.any((p_values < 0.0) | (p_values > 1.0)):
+        raise ValueError(f"Invalid p-values before Holm correction: {p_values.tolist()}")
+    adjusted = multipletests(p_values, method="holm")
+    for record, reject, p_adjusted in zip(records, adjusted[0], adjusted[1], strict=True):
+        if not np.isfinite(p_adjusted):
+            raise ValueError(f"Invalid Holm-adjusted p-value: {p_adjusted}")
+        record["p_holm"] = float(p_adjusted)
+        record["reject_holm_0_05"] = bool(reject)
+
+
+def paired_rank_biserial(differences: np.ndarray) -> float:
+    """Return paired rank-biserial correlation with the sign of the stated difference."""
+    clean = np.asarray(differences, dtype=float)
+    clean = clean[np.isfinite(clean) & ~np.isclose(clean, 0.0)]
+    if clean.size == 0:
+        return 0.0
+    ranks = scipy.stats.rankdata(np.abs(clean), method="average")
+    positive = float(ranks[clean > 0].sum())
+    negative = float(ranks[clean < 0].sum())
+    return (positive - negative) / (positive + negative)
 
 
 def aggregate_seeds(frame: pd.DataFrame) -> pd.DataFrame:
     """Average optimization repeats inside each subject before any inference."""
+    if not np.isfinite(frame["value"].to_numpy(dtype=float)).all():
+        raise ValueError("Non-finite metric value found before seed aggregation")
     keys = [key for key in CELL_KEYS if key != "seed"] + ["metric"]
     return frame.groupby(keys, as_index=False, observed=True)["value"].mean()
 
@@ -203,22 +255,18 @@ def paired_model_tests(frame: pd.DataFrame) -> pd.DataFrame:
                     "median_difference_a_minus_b": float(np.median(differences)),
                     "difference_ci95_low": low,
                     "difference_ci95_high": high,
+                    "rank_biserial_a_minus_b": paired_rank_biserial(differences),
                     "p_raw": _wilcoxon_pvalue(differences),
                 }
             )
         if family_records:
-            adjusted = multipletests([record["p_raw"] for record in family_records], method="holm")
-            for record, reject, p_adjusted in zip(
-                family_records, adjusted[0], adjusted[1], strict=True
-            ):
-                record["p_holm"] = float(p_adjusted)
-                record["reject_holm_0_05"] = bool(reject)
+            _holm_adjust(family_records)
             records.extend(family_records)
     return pd.DataFrame(records)
 
 
 def augmentation_tests(frame: pd.DataFrame) -> pd.DataFrame:
-    """Test both augmentation conditions against center-crop controls by subject."""
+    """Test augmentations against compute-matched repeated center-crop controls."""
     subject_means = aggregate_seeds(frame.loc[frame["metric"].isin(PRIMARY_METRICS)])
     family_keys = ["dataset", "task", "protocol", "ica_policy", "metric"]
     records: list[dict[str, object]] = []
@@ -226,8 +274,14 @@ def augmentation_tests(frame: pd.DataFrame) -> pd.DataFrame:
         family_records = []
         for model in sorted(values["model"].unique()):
             model_values = values.loc[values["model"] == model]
-            center = model_values.loc[model_values["condition"] == "center", ["subject", "value"]]
-            for condition in ("nonoverlap", "overlap"):
+            for condition, control in (
+                ("overlap", "center"),
+                ("nonoverlap", "center_x2"),
+                ("overlap", "center_x6"),
+            ):
+                center = model_values.loc[
+                    model_values["condition"] == control, ["subject", "value"]
+                ]
                 candidate = model_values.loc[
                     model_values["condition"] == condition, ["subject", "value"]
                 ]
@@ -251,23 +305,110 @@ def augmentation_tests(frame: pd.DataFrame) -> pd.DataFrame:
                     {
                         **dict(zip(family_keys, family, strict=True)),
                         "model": model,
-                        "comparison": f"{condition}-center",
+                        "comparison": f"{condition}-{control}",
                         "n_subjects": len(paired),
                         "mean_difference": mean,
                         "difference_ci95_low": low,
                         "difference_ci95_high": high,
+                        "rank_biserial_augmented_minus_center": paired_rank_biserial(
+                            differences.to_numpy()
+                        ),
                         "p_raw": _wilcoxon_pvalue(differences.to_numpy()),
                     }
                 )
         if family_records:
-            adjusted = multipletests([record["p_raw"] for record in family_records], method="holm")
-            for record, reject, p_adjusted in zip(
-                family_records, adjusted[0], adjusted[1], strict=True
-            ):
-                record["p_holm"] = float(p_adjusted)
-                record["reject_holm_0_05"] = bool(reject)
+            _holm_adjust(family_records)
             records.extend(family_records)
     return pd.DataFrame(records)
+
+
+def sample_accounting_table(payloads: list[dict[str, object]]) -> pd.DataFrame:
+    """Flatten fold-level trial, example, and class counts for audit and reporting."""
+    records: list[dict[str, object]] = []
+    identity_keys = [
+        "dataset",
+        "task",
+        "protocol",
+        "condition",
+        "ica_policy",
+        "model",
+        "subject",
+        "seed",
+    ]
+    for payload in payloads:
+        identity = {key: payload[key] for key in identity_keys}
+        for fold_index, report in enumerate(payload.get("fold_reports", [])):
+            train_counts = report.get("train_class_counts", {})
+            test_counts = report.get("test_class_counts", {})
+            training_history = report.get("training_history", [])
+            records.append(
+                {
+                    **identity,
+                    "fold_index": fold_index,
+                    "session": report.get("session"),
+                    "held_session": report.get("held_session"),
+                    "n_train_trials": report.get("n_train_trials"),
+                    "n_train_examples": report.get("n_train_examples"),
+                    "n_test_trials": report.get("n_test_trials"),
+                    "optimizer_updates": sum(
+                        int(epoch.get("train_batch_count", 0)) for epoch in training_history
+                    ),
+                    "train_class_0": train_counts.get("0"),
+                    "train_class_1": train_counts.get("1"),
+                    "test_class_0": test_counts.get("0"),
+                    "test_class_1": test_counts.get("1"),
+                }
+            )
+    return pd.DataFrame(records)
+
+
+def validate_matched_augmentation_compute(
+    payloads: list[dict[str, object]], *, strict: bool = False
+) -> None:
+    """Reject augmentation pairs with unequal examples or optimizer updates."""
+    matched: dict[tuple[object, ...], dict[str, tuple[int, tuple[int, ...]]]] = {}
+    conditions = {"center_x2", "nonoverlap", "center_x6", "overlap"}
+    for payload in payloads:
+        condition = str(payload.get("condition"))
+        if (
+            payload.get("protocol") != "within_split"
+            or condition not in conditions
+            or payload.get("ica_policy") != "none"
+        ):
+            continue
+        base = tuple(
+            payload.get(key)
+            for key in ("dataset", "protocol", "ica_policy", "model", "subject", "seed")
+        )
+        for fold_index, report in enumerate(payload.get("fold_reports", [])):
+            batches_per_epoch = tuple(
+                int(epoch.get("train_batch_count", 0))
+                for epoch in report.get("training_history", [])
+            )
+            is_classical = is_classical_model(str(payload.get("model")))
+            if strict and not is_classical and len(batches_per_epoch) != PAPER_EPOCHS:
+                raise ValueError(
+                    f"Compute audit for {(*base, fold_index)} requires "
+                    f"{PAPER_EPOCHS} recorded epochs"
+                )
+            matched.setdefault((*base, fold_index), {})[condition] = (
+                int(report["n_train_examples"]),
+                batches_per_epoch,
+            )
+    for key, values in matched.items():
+        for control, candidate in (
+            ("center_x2", "nonoverlap"),
+            ("center_x6", "overlap"),
+        ):
+            present = {control, candidate} & set(values)
+            if strict and present and present != {control, candidate}:
+                missing = {control, candidate} - present
+                raise ValueError(f"Compute audit for {key} is missing {sorted(missing)}")
+            if present == {control, candidate} and values[control] != values[candidate]:
+                raise ValueError(
+                    f"Compute mismatch for {key}: {control}={values[control]} "
+                    f"and {candidate}={values[candidate]}"
+                )
 
 
 def write_statistics(
@@ -280,6 +421,10 @@ def write_statistics(
 ) -> None:
     output_dir.mkdir(parents=True, exist_ok=True)
     frame = load_cells(cells_dir)
+    payloads = [
+        json.loads(path.read_text(encoding="utf-8")) for path in sorted(cells_dir.glob("*.json"))
+    ]
+    validate_matched_augmentation_compute(payloads, strict=not force_exploratory)
     completeness = completeness_table(frame, expected_seeds)
     completeness.to_csv(output_dir / "completeness.csv", index=False)
     incomplete = force_exploratory or not bool(completeness["complete"].all())
@@ -288,14 +433,23 @@ def write_statistics(
     outputs = {
         "all_seed_metrics.csv": frame,
         "descriptive_subject_seed_variability.csv": descriptive_table(frame),
+        "sample_accounting.csv": sample_accounting_table(payloads),
     }
+    incomplete_marker = output_dir / "INCOMPLETE_EXPLORATORY_ONLY.txt"
+    inferential_names = (
+        "paired_wilcoxon_holm.csv",
+        "augmentation_wilcoxon_holm.csv",
+    )
     if incomplete:
-        (output_dir / "INCOMPLETE_EXPLORATORY_ONLY.txt").write_text(
+        incomplete_marker.write_text(
             "Seed grid incomplete. Descriptive outputs are exploratory; no inferential tables "
             "were generated.\n",
             encoding="utf-8",
         )
+        for name in inferential_names:
+            (output_dir / name).unlink(missing_ok=True)
     else:
+        incomplete_marker.unlink(missing_ok=True)
         outputs["paired_wilcoxon_holm.csv"] = paired_model_tests(frame)
         outputs["augmentation_wilcoxon_holm.csv"] = augmentation_tests(frame)
     for name, table in outputs.items():

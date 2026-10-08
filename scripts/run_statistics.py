@@ -4,13 +4,14 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 from pathlib import Path
 
-import pandas as pd
-
 from deepbench.config import PAPER_SEEDS, RESULTS_DIR
-from deepbench.statistics import write_statistics
+from deepbench.io import write_json_atomic
+from deepbench.paper_audit import audit_expected_cells, result_cells_sha256
+from deepbench.statistics import statistics_code_sha256, write_statistics
 
 
 def main() -> None:
@@ -20,31 +21,39 @@ def main() -> None:
     parser.add_argument("--allow-incomplete", action="store_true")
     args = parser.parse_args()
     (args.results_dir / "statistics").mkdir(parents=True, exist_ok=True)
-    expected: set[str] = set()
-    missing = 0
-    for path in (args.results_dir / "manifests").glob("paper-expected-*.json"):
-        payload = json.loads(path.read_text(encoding="utf-8"))
-        expected.update(payload.get("expected_cells", []))
-    if expected:
-        present = {
-            str(path.relative_to(args.results_dir))
-            for path in (args.results_dir / "cells").glob("*.json")
-        }
-        audit = pd.DataFrame(
-            [{"cell": cell, "present": cell in present} for cell in sorted(expected)]
-        )
-        audit.to_csv(args.results_dir / "statistics" / "expected_cell_audit.csv", index=False)
-        missing = int((~audit["present"]).sum())
-        if missing and not args.allow_incomplete:
-            raise SystemExit(
-                f"{missing} expected paper cells are missing; see expected_cell_audit.csv"
-            )
+    audit, confirmatory, issues = audit_expected_cells(args.results_dir)
+    audit.to_csv(args.results_dir / "statistics" / "expected_cell_audit.csv", index=False)
+    if not confirmatory and not args.allow_incomplete:
+        details = "; ".join(issues)
+        raise SystemExit(f"Confirmatory integrity audit failed: {details}")
     write_statistics(
         args.results_dir / "cells",
         args.results_dir / "statistics",
         tuple(args.seeds),
         allow_incomplete=args.allow_incomplete,
-        force_exploratory=missing > 0,
+        force_exploratory=not confirmatory,
+    )
+    expectation_manifests = sorted((args.results_dir / "manifests").glob("paper-expected-*.json"))
+    profile_hashes = sorted(
+        {
+            str(json.loads(path.read_text(encoding="utf-8")).get("profile_sha256"))
+            for path in expectation_manifests
+        }
+    )
+    statistics_files = sorted((args.results_dir / "statistics").glob("*.csv"))
+    write_json_atomic(
+        args.results_dir / "statistics" / "statistics_manifest.json",
+        {
+            "result_cells_sha256": result_cells_sha256(args.results_dir),
+            "profile_sha256_values": profile_hashes,
+            "confirmatory": confirmatory,
+            "expected_cell_count": int(len(audit)),
+            "statistics_code_sha256": statistics_code_sha256(),
+            "statistics_files": {
+                path.name: hashlib.sha256(path.read_bytes()).hexdigest()
+                for path in statistics_files
+            },
+        },
     )
     print(f"Statistics written to {args.results_dir / 'statistics'}")
 
