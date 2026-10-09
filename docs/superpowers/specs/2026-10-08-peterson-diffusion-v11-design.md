@@ -2,7 +2,7 @@
 
 Fecha: 2026-10-08
 
-Estado: especificación para revisión
+Estado: aprobada por el autor el 2026-10-08
 
 Rama: `exp/peterson-diffusion-v11`
 
