@@ -69,6 +69,7 @@ def test_launcher_has_two_shards_and_propagates_failures() -> None:
     assert "wait \"$pid0\"" in launcher
     assert "wait \"$pid1\"" in launcher
     assert "DIFFUSION_MAX_CELLS_PER_SHARD" in launcher
+    assert "DIFFUSION_EPOCHS" in launcher
     subprocess.run(["bash", "-n", "run_diffusion_cayetano.sh"], cwd=ROOT, check=True)
 
 
