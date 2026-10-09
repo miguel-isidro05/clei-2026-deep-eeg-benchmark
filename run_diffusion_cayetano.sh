@@ -13,6 +13,14 @@ if [[ "${#devices[@]}" -ne 2 ]]; then
   exit 2
 fi
 
+extra_args=()
+if [[ -n "${DIFFUSION_MAX_CELLS_PER_SHARD:-}" ]]; then
+  extra_args+=(--max-cells-per-shard "$DIFFUSION_MAX_CELLS_PER_SHARD")
+fi
+if [[ -n "${DIFFUSION_EPOCHS:-}" ]]; then
+  extra_args+=(--epochs "$DIFFUSION_EPOCHS")
+fi
+
 export PYTHONPATH="$root_dir/src:$root_dir${PYTHONPATH:+:$PYTHONPATH}"
 mkdir -p "$DIFFUSION_RESULTS_DIR/logs"
 started_utc="$(date -u +%Y%m%dT%H%M%SZ)"
@@ -53,6 +61,7 @@ python -u scripts/run_diffusion_v11.py \
   --device "${devices[0]}" \
   --output-dir "$DIFFUSION_RESULTS_DIR" \
   --num-shards 2 --shard-index 0 \
+  "${extra_args[@]}" \
   --plan-only
 
 python -u scripts/run_diffusion_v11.py \
@@ -60,6 +69,7 @@ python -u scripts/run_diffusion_v11.py \
   --device "${devices[0]}" \
   --output-dir "$DIFFUSION_RESULTS_DIR" \
   --num-shards 2 --shard-index 0 \
+  "${extra_args[@]}" \
   > >(tee -a "$DIFFUSION_RESULTS_DIR/logs/shard-0.log") 2>&1 &
 pid0=$!
 
@@ -68,6 +78,7 @@ python -u scripts/run_diffusion_v11.py \
   --device "${devices[1]}" \
   --output-dir "$DIFFUSION_RESULTS_DIR" \
   --num-shards 2 --shard-index 1 \
+  "${extra_args[@]}" \
   > >(tee -a "$DIFFUSION_RESULTS_DIR/logs/shard-1.log") 2>&1 &
 pid1=$!
 
@@ -80,9 +91,20 @@ if [[ "$status0" -ne 0 || "$status1" -ne 0 ]]; then
   exit 1
 fi
 
-python -u scripts/check_diffusion_v11.py \
-  --output-dir "$DIFFUSION_RESULTS_DIR" \
-  --write-complete
+if [[ -n "${DIFFUSION_MAX_CELLS_PER_SHARD:-}" ]]; then
+  expected_smoke_cells=$((DIFFUSION_MAX_CELLS_PER_SHARD * 2))
+  found_smoke_cells="$(find "$DIFFUSION_RESULTS_DIR/cells" -type f -name '*.json' | wc -l)"
+  found_smoke_cells="${found_smoke_cells//[[:space:]]/}"
+  if [[ "$found_smoke_cells" -ne "$expected_smoke_cells" ]]; then
+    echo "diffusion_v11_smoke=failed expected=$expected_smoke_cells found=$found_smoke_cells" >&2
+    exit 1
+  fi
+  echo "diffusion_v11_smoke=OK expected=$expected_smoke_cells found=$found_smoke_cells"
+else
+  python -u scripts/check_diffusion_v11.py \
+    --output-dir "$DIFFUSION_RESULTS_DIR" \
+    --write-complete
+fi
 
 echo "run_completed_utc=$(date -u +%Y%m%dT%H%M%SZ)"
 echo "diffusion_v11=OK wave=$DIFFUSION_WAVE output=$DIFFUSION_RESULTS_DIR"

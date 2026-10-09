@@ -23,6 +23,7 @@ def main() -> None:
     parser.add_argument("--output-dir", type=Path, required=True)
     parser.add_argument("--num-shards", type=int, default=1)
     parser.add_argument("--shard-index", type=int, default=0)
+    parser.add_argument("--max-cells-per-shard", type=int)
     parser.add_argument("--epochs", type=int)
     parser.add_argument("--batch-size", type=int)
     parser.add_argument("--hidden", type=int)
@@ -52,6 +53,7 @@ def main() -> None:
         device=args.device,
         num_shards=args.num_shards,
         shard_index=args.shard_index,
+        max_cells_per_shard=args.max_cells_per_shard,
         plan_only=args.plan_only,
     )
     print(" ".join(f"{key}={value}" for key, value in report.items()), flush=True)

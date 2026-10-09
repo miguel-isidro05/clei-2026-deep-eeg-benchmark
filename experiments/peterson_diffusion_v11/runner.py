@@ -249,10 +249,15 @@ def run_plan(
     device: str,
     num_shards: int = 1,
     shard_index: int = 0,
+    max_cells_per_shard: int | None = None,
     plan_only: bool = False,
 ) -> dict[str, int]:
     all_cells = build_manifest(config)
     selected_cells = shard_cells(all_cells, num_shards=num_shards, shard_index=shard_index)
+    if max_cells_per_shard is not None:
+        if max_cells_per_shard < 1:
+            raise ValueError("max_cells_per_shard must be at least 1")
+        selected_cells = selected_cells[:max_cells_per_shard]
     manifest = manifest_payload(config, all_cells)
     manifest["code_sha256"] = code_sha256(_root())
     manifest["git"] = git_identity(_root())

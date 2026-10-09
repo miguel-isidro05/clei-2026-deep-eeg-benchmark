@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import numpy as np
+import pytest
 
 from deepbench.types import SubjectRecording
 from experiments.peterson_diffusion_v11.config import ExperimentConfig
@@ -79,3 +80,14 @@ def test_plan_only_can_limit_selected_cells_without_changing_manifest(tmp_path) 
     assert report == {"planned_total": 240, "planned_shard": 1}
     manifest = (tmp_path / "manifests" / "expected.json").read_text()
     assert '"expected_cell_count": 240' in manifest
+
+
+def test_plan_rejects_empty_smoke_shard(tmp_path) -> None:
+    with pytest.raises(ValueError, match="at least 1"):
+        run_plan(
+            ExperimentConfig(wave=1),
+            output_dir=tmp_path,
+            device="cpu",
+            max_cells_per_shard=0,
+            plan_only=True,
+        )
