@@ -64,3 +64,18 @@ def test_plan_only_does_not_load_data(tmp_path, monkeypatch) -> None:
     )
     assert report == {"planned_total": 240, "planned_shard": 120}
     assert (tmp_path / "manifests" / "expected.json").exists()
+
+
+def test_plan_only_can_limit_selected_cells_without_changing_manifest(tmp_path) -> None:
+    report = run_plan(
+        ExperimentConfig(wave=1),
+        output_dir=tmp_path,
+        device="cpu",
+        num_shards=2,
+        shard_index=0,
+        max_cells_per_shard=1,
+        plan_only=True,
+    )
+    assert report == {"planned_total": 240, "planned_shard": 1}
+    manifest = (tmp_path / "manifests" / "expected.json").read_text()
+    assert '"expected_cell_count": 240' in manifest
