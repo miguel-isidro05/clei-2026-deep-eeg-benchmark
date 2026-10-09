@@ -20,9 +20,16 @@ from experiments.peterson_diffusion_v11.manifests import CellSpec  # noqa: E402
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--output-dir", type=Path, required=True)
+    parser.add_argument(
+        "--manifest-name",
+        choices=("expected.json", "smoke_expected.json"),
+        default="expected.json",
+    )
     parser.add_argument("--write-complete", action="store_true")
     args = parser.parse_args()
-    manifest_path = args.output_dir / "manifests" / "expected.json"
+    if args.write_complete and args.manifest_name != "expected.json":
+        raise SystemExit("A smoke audit cannot write run_complete.json")
+    manifest_path = args.output_dir / "manifests" / args.manifest_name
     if not manifest_path.exists():
         raise SystemExit(f"Missing V11 manifest: {manifest_path}")
     manifest = json.loads(manifest_path.read_text())

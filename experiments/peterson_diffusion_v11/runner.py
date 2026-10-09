@@ -262,6 +262,20 @@ def run_plan(
     manifest["code_sha256"] = code_sha256(_root())
     manifest["git"] = git_identity(_root())
     write_json_atomic(output_dir / "manifests" / "expected.json", manifest)
+    if max_cells_per_shard is not None:
+        smoke_cells = [
+            cell
+            for index in range(num_shards)
+            for cell in shard_cells(all_cells, num_shards=num_shards, shard_index=index)[
+                :max_cells_per_shard
+            ]
+        ]
+        smoke_manifest = manifest_payload(config, smoke_cells)
+        smoke_manifest["code_sha256"] = manifest["code_sha256"]
+        smoke_manifest["git"] = manifest["git"]
+        write_json_atomic(
+            output_dir / "manifests" / "smoke_expected.json", smoke_manifest
+        )
     report = {"planned_total": len(all_cells), "planned_shard": len(selected_cells)}
     if plan_only:
         return report

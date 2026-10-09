@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import json
+
 import numpy as np
 import pytest
 
@@ -78,8 +80,13 @@ def test_plan_only_can_limit_selected_cells_without_changing_manifest(tmp_path) 
         plan_only=True,
     )
     assert report == {"planned_total": 240, "planned_shard": 1}
-    manifest = (tmp_path / "manifests" / "expected.json").read_text()
-    assert '"expected_cell_count": 240' in manifest
+    manifest = json.loads((tmp_path / "manifests" / "expected.json").read_text())
+    smoke_manifest = json.loads(
+        (tmp_path / "manifests" / "smoke_expected.json").read_text()
+    )
+    assert manifest["expected_cell_count"] == 240
+    assert smoke_manifest["expected_cell_count"] == 2
+    assert {cell["subject"] for cell in smoke_manifest["cells"]} == {"S02", "S03"}
 
 
 def test_plan_rejects_empty_smoke_shard(tmp_path) -> None:

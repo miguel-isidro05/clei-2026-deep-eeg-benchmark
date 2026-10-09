@@ -14,11 +14,16 @@ if [[ "${#devices[@]}" -ne 2 ]]; then
 fi
 
 extra_args=()
-if [[ -n "${DIFFUSION_MAX_CELLS_PER_SHARD:-}" ]]; then
-  extra_args+=(--max-cells-per-shard "$DIFFUSION_MAX_CELLS_PER_SHARD")
-fi
-if [[ -n "${DIFFUSION_EPOCHS:-}" ]]; then
-  extra_args+=(--epochs "$DIFFUSION_EPOCHS")
+smoke_mode="${DIFFUSION_SMOKE:-0}"
+if [[ "$smoke_mode" == "1" ]]; then
+  if [[ "$DIFFUSION_WAVE" != "1" ]]; then
+    echo "DIFFUSION_SMOKE=1 is supported only for wave 1 GPU validation" >&2
+    exit 2
+  fi
+  extra_args+=(--max-cells-per-shard 1 --epochs 1)
+elif [[ "$smoke_mode" != "0" ]]; then
+  echo "DIFFUSION_SMOKE must be 0 or 1" >&2
+  exit 2
 fi
 
 export PYTHONPATH="$root_dir/src:$root_dir${PYTHONPATH:+:$PYTHONPATH}"
@@ -91,15 +96,11 @@ if [[ "$status0" -ne 0 || "$status1" -ne 0 ]]; then
   exit 1
 fi
 
-if [[ -n "${DIFFUSION_MAX_CELLS_PER_SHARD:-}" ]]; then
-  expected_smoke_cells=$((DIFFUSION_MAX_CELLS_PER_SHARD * 2))
-  found_smoke_cells="$(find "$DIFFUSION_RESULTS_DIR/cells" -type f -name '*.json' | wc -l)"
-  found_smoke_cells="${found_smoke_cells//[[:space:]]/}"
-  if [[ "$found_smoke_cells" -ne "$expected_smoke_cells" ]]; then
-    echo "diffusion_v11_smoke=failed expected=$expected_smoke_cells found=$found_smoke_cells" >&2
-    exit 1
-  fi
-  echo "diffusion_v11_smoke=OK expected=$expected_smoke_cells found=$found_smoke_cells"
+if [[ "$smoke_mode" == "1" ]]; then
+  python -u scripts/check_diffusion_v11.py \
+    --output-dir "$DIFFUSION_RESULTS_DIR" \
+    --manifest-name smoke_expected.json
+  echo "diffusion_v11_smoke=OK output=$DIFFUSION_RESULTS_DIR"
 else
   python -u scripts/check_diffusion_v11.py \
     --output-dir "$DIFFUSION_RESULTS_DIR" \
