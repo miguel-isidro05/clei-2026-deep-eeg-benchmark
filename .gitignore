@@ -5,6 +5,7 @@ __pycache__/
 .ruff_cache/
 .venv/
 results/
+results_diffusion_v11/
 *.pt
 *.pth
 data/

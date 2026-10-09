@@ -50,6 +50,12 @@ H1 avanza si la diferencia media de accuracy por participante es al menos 0.02 y
 `overlap` en al menos 7 de 10 participantes. Si no se cumple, `full` será la condición primaria de
 las olas arquitectónicas y `overlap` quedará como sensibilidad.
 
+El contraste primario de H1 promedia primero las cinco seeds dentro de cada combinación
+participante-modelo y luego promedia EEGNet, FBCNet, ShallowConvNet y EEGConformer dentro de cada
+participante. CSP+LDA se informa como sensibilidad secundaria porque sus repeticiones por seed son
+deterministas y su sesgo inductivo de covarianza difiere del de los modelos deep. No se seleccionará
+post hoc el modelo que produzca la mayor diferencia.
+
 ### H2. Base temporal suave
 
 Si restringir los kernels temporales reduce sobreajuste con pocos datos, `MCDD-SmoothBasis`

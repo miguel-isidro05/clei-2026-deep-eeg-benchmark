@@ -380,6 +380,8 @@ Implementación mínima:
 
 - esquema estricto de celda/manifiesto;
 - comparaciones pareadas por participante;
+- contraste H1 predeclarado: seeds → media por modelo-participante → media de los cuatro modelos
+  deep por participante; CSP+LDA queda como sensibilidad secundaria;
 - bootstrap o permutación determinista para intervalos, según el contrato congelado;
 - corrección Holm por familia;
 - `decision.json` legible por la siguiente ola.
@@ -570,7 +572,7 @@ cd /home/imiguel/Desktop/clei-2026-deep-eeg-benchmark
 git fetch origin
 git switch --track origin/exp/peterson-diffusion-v11
 git pull --ff-only
-conda activate eeg-diffusion
+conda activate deep-eeg-clei
 
 tmux new -s peterson_diffusion_v11
 export CLEI_DATA_DIR='/home/imiguel/Desktop/clei-2026-deep-eeg-benchmark/data/mi-openbci'
@@ -582,4 +584,3 @@ bash run_diffusion_cayetano.sh
 
 Estos comandos son una plantilla del contrato aprobado. El comando definitivo solo se entregará
 después de que el commit remoto exista, los tests pasen y el SHA exacto quede verificado.
-

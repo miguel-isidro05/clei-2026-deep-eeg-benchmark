@@ -1,0 +1,10 @@
+{
+  "wave": 1,
+  "epochs": 300,
+  "batch_size": 64,
+  "patience": 75,
+  "hidden": 32,
+  "diffusion_steps": 100,
+  "inference_k": 4,
+  "objective": "noise_rank_consistency"
+}

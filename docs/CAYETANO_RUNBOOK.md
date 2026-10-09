@@ -90,3 +90,48 @@ shasum -a 256 -c clei-peterson-publication-v10-*.tar.gz.sha256
 
 El exportador verifica cada SHA-256 del manifest antes de comprimir y excluye `logs/` y
 `fold_cache/`. El archivo completo original debe conservarse como procedencia interna.
+
+## Extensión exploratoria Peterson Diffusion V11
+
+V11 usa una rama y una carpeta independientes. No se ejecuta sobre el directorio de resultados V10
+ni modifica sus 3,250 celdas. La primera corrida es la ola 0: 250 celdas `center_x6` destinadas a
+compararse con `overlap` V10 bajo el mismo presupuesto.
+
+```bash
+cd /home/imiguel/Desktop/clei-2026-deep-eeg-benchmark
+git fetch origin
+git switch --track origin/exp/peterson-diffusion-v11
+git pull --ff-only
+conda activate deep-eeg-clei
+
+tmux new -s peterson_diffusion_v11
+export CLEI_DATA_DIR='/home/imiguel/Desktop/clei-2026-deep-eeg-benchmark/data/mi-openbci'
+export DIFFUSION_WAVE='0'
+export DIFFUSION_DEVICES='cuda:0 cuda:1'
+export DIFFUSION_RESULTS_DIR="results_diffusion_v11/wave_00_$(git rev-parse --short HEAD)"
+bash run_diffusion_cayetano.sh
+```
+
+Separar tmux sin detener la corrida: `Ctrl-b`, luego `d`. Volver a entrar:
+`tmux attach -t peterson_diffusion_v11`.
+
+Comprobar progreso:
+
+```bash
+pgrep -af 'run_diffusion_cayetano.sh|run_diffusion_v11.py'
+find "$DIFFUSION_RESULTS_DIR/cells" -name '*.json' | wc -l
+tail -n 30 "$DIFFUSION_RESULTS_DIR/logs/shard-0.log"
+tail -n 30 "$DIFFUSION_RESULTS_DIR/logs/shard-1.log"
+nvidia-smi
+```
+
+La ola 0 termina únicamente cuando `run_complete.json` existe y el auditor informa `250/250`:
+
+```bash
+python scripts/check_diffusion_v11.py \
+  --output-dir "$DIFFUSION_RESULTS_DIR"
+test -f "$DIFFUSION_RESULTS_DIR/run_complete.json" && echo 'wave_00=complete'
+```
+
+No lanzar ola 1 antes de transferir y analizar la ola 0 contra el resultado V10. El archivo
+`decisions/wave_00.json` determina si `overlap` o `full` será la condición primaria siguiente.
