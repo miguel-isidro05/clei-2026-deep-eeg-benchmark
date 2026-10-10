@@ -24,9 +24,15 @@ from deepbench.preprocessing import (
 from .audit import validate_cell_payload
 from .catalogs import CandidateSpec, build_exp01_catalog, catalog_payload
 from .config import SearchConfig
-from .identity import code_sha256, git_identity
+from .identity import canonical_sha256, code_sha256, git_identity
 from .io import write_json_atomic
-from .manifests import CellSpec, SearchManifest, build_manifest, shard_cells
+from .manifests import (
+    CellSpec,
+    SearchManifest,
+    build_manifest,
+    build_smoke_manifest,
+    shard_cells,
+)
 from .models import parameter_report
 from .splits import build_search_splits
 from .training import predict_numpy, train_candidate
@@ -65,6 +71,25 @@ def write_plan(output_dir: Path, config: SearchConfig, *, revision: str) -> dict
     return plan
 
 
+def write_smoke_plan(output_dir: Path, config: SearchConfig, *, revision: str) -> dict[str, Any]:
+    catalog = build_exp01_catalog(config)
+    manifest = build_smoke_manifest(config, catalog, revision=revision)
+    write_json_atomic(output_dir / "manifests" / "catalog-exp01.json", catalog_payload(catalog))
+    write_json_atomic(output_dir / "manifests" / "smoke-exp01.json", _manifest_payload(manifest))
+    plan = {
+        "experiment": "exp01",
+        "profile": "smoke",
+        "candidate_count": len(catalog),
+        "cell_count": len(manifest.cells),
+        "subjects": [cell.subject for cell in manifest.cells],
+        "folds": list(config.folds),
+        "seed": 0,
+        "manifest_sha256": manifest.sha256,
+    }
+    write_json_atomic(output_dir / "smoke-plan.json", plan)
+    return plan
+
+
 def _clean_preprocessing_report(report: dict[str, Any]) -> dict[str, Any]:
     cleaned = dict(report)
     cleaned["post_preprocessing_validation_sha256"] = cleaned.pop("post_preprocessing_test_sha256")
@@ -91,6 +116,14 @@ def _environment(device: str) -> dict[str, Any]:
     }
 
 
+def is_resumable_cell(payload: dict[str, Any], expected_fingerprint: dict[str, Any]) -> bool:
+    try:
+        validate_cell_payload(payload)
+    except (ValueError, KeyError, TypeError):
+        return False
+    return payload.get("fingerprint") == expected_fingerprint
+
+
 def _run_cell(
     output_dir: Path,
     config: SearchConfig,
@@ -98,12 +131,13 @@ def _run_cell(
     cell: CellSpec,
     *,
     device: str,
-    revision: str,
-    code_hash: str,
+    fingerprint: dict[str, Any],
+    recording: Any,
+    splits: Any,
 ) -> dict[str, Any]:
     started = time.perf_counter()
-    recording = load_subject("MI-OpenBCI", cell.subject)
-    splits = build_search_splits(recording, folds=config.folds, split_seed=config.split_seed)
+    if device.startswith("cuda"):
+        torch.cuda.reset_peak_memory_stats(torch.device(device))
     labels: list[int] = []
     predictions: list[int] = []
     scores: list[float] = []
@@ -142,6 +176,9 @@ def _run_cell(
             seed=cell.seed * 10_000 + split_index,
             checkpoint_path=checkpoint,
         )
+        if device.startswith("cuda"):
+            torch.cuda.synchronize(torch.device(device))
+        inference_started = time.perf_counter()
         window_probabilities = predict_numpy(
             outcome.model,
             x_validation,
@@ -150,6 +187,9 @@ def _run_cell(
             device=device,
             seed=cell.seed + split_index,
         )[:, 1]
+        if device.startswith("cuda"):
+            torch.cuda.synchronize(torch.device(device))
+        inference_seconds = time.perf_counter() - inference_started
         fold_pred, fold_score, windows_per_trial = aggregate_window_scores(
             window_probabilities, trial_indices, n_trials=len(validation_indices)
         )
@@ -173,6 +213,7 @@ def _run_cell(
                 "n_train_windows": len(x_train),
                 "n_validation_windows": len(x_validation),
                 "windows_per_validation_trial": windows_per_trial,
+                "inference_seconds_per_trial": inference_seconds / len(validation_indices),
                 "best_epoch": outcome.best_epoch,
                 "updates": outcome.updates,
                 "history": outcome.history,
@@ -184,6 +225,9 @@ def _run_cell(
         if device.startswith("cuda"):
             torch.cuda.empty_cache()
     elapsed = time.perf_counter() - started
+    inference_per_trial = float(
+        np.mean([report["inference_seconds_per_trial"] for report in fold_reports])
+    )
     payload = {
         "schema_version": 1,
         "status": "completed",
@@ -204,15 +248,11 @@ def _run_cell(
         "parameters": parameter_report(candidate, n_chans=len(recording.ch_names)),
         "runtime": {
             "elapsed_seconds": elapsed,
+            "inference_seconds_per_trial": inference_per_trial,
             "peak_device_memory_bytes": peak_memory,
             "environment": _environment(device),
         },
-        "fingerprint": {
-            "candidate_sha256": candidate.sha256,
-            "code_sha256": code_hash,
-            "data_sha256": recording.data_sha256,
-            "revision": revision,
-        },
+        "fingerprint": fingerprint,
     }
     validate_cell_payload(payload)
     return payload
@@ -226,31 +266,61 @@ def run_search(
     num_shards: int,
     shard_index: int,
     max_cells_per_shard: int | None = None,
+    smoke: bool = False,
 ) -> dict[str, int]:
     root = _root()
     git = git_identity(root)
     revision = str(git["revision"] or "unknown")
-    plan = write_plan(output_dir, config, revision=revision)
+    if git["dirty"] is not False and not smoke:
+        raise RuntimeError("Full V12 search requires a clean Git tree")
     catalog = build_exp01_catalog(config)
     catalog_by_id = {candidate.config_id: candidate for candidate in catalog}
-    manifest = build_manifest(config, catalog, revision=revision)
+    if smoke:
+        plan = write_smoke_plan(output_dir, config, revision=revision)
+        manifest = build_smoke_manifest(config, catalog, revision=revision)
+    else:
+        plan = write_plan(output_dir, config, revision=revision)
+        manifest = build_manifest(config, catalog, revision=revision)
     cells = shard_cells(manifest.cells, num_shards=num_shards, shard_index=shard_index)
     if max_cells_per_shard is not None:
         cells = cells[:max_cells_per_shard]
     code_hash = code_sha256(root)
+    config_hash = canonical_sha256(asdict(config))
+    environment = _environment(device)
+    environment_hash = canonical_sha256(environment)
+    recording_cache: dict[str, Any] = {}
+    split_cache: dict[str, Any] = {}
     completed = 0
     for cell in cells:
+        if cell.subject not in recording_cache:
+            recording_cache[cell.subject] = load_subject("MI-OpenBCI", cell.subject)
+            split_cache[cell.subject] = build_search_splits(
+                recording_cache[cell.subject],
+                folds=config.folds,
+                split_seed=config.split_seed,
+            )
+        recording = recording_cache[cell.subject]
+        splits = split_cache[cell.subject]
+        fingerprint = {
+            "candidate_sha256": cell.candidate_sha256,
+            "catalog_sha256": manifest.catalog_sha256,
+            "config_sha256": config_hash,
+            "manifest_sha256": manifest.sha256,
+            "code_sha256": code_hash,
+            "data_sha256": recording.data_sha256,
+            "split_sha256": canonical_sha256([split.sha256 for split in splits]),
+            "environment_sha256": environment_hash,
+            "device": device,
+            "revision": revision,
+            "git_dirty": bool(git["dirty"]),
+        }
         path = output_dir / "cells" / f"{cell.cell_id}.json"
         if path.is_file():
             try:
                 import json
 
                 existing = json.loads(path.read_text(encoding="utf-8"))
-                validate_cell_payload(existing)
-                if (
-                    existing["fingerprint"]["candidate_sha256"] == cell.candidate_sha256
-                    and existing["fingerprint"]["code_sha256"] == code_hash
-                ):
+                if is_resumable_cell(existing, fingerprint):
                     completed += 1
                     print(f"skipped {path.name}", flush=True)
                     continue
@@ -262,8 +332,9 @@ def run_search(
             catalog_by_id[cell.config_id],
             cell,
             device=device,
-            revision=revision,
-            code_hash=code_hash,
+            fingerprint=fingerprint,
+            recording=recording,
+            splits=splits,
         )
         write_json_atomic(path, payload)
         completed += 1

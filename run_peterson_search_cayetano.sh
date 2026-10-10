@@ -46,7 +46,7 @@ echo "peterson_data_preflight=OK subjects=6"
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$root"
 
-if [[ "${PETERSON_SEARCH_SMOKE:-0}" != "1" ]] && [[ -n "$(git status --porcelain --untracked-files=no)" ]]; then
+if [[ "${PETERSON_SEARCH_SMOKE:-0}" != "1" ]] && [[ -n "$(git status --porcelain)" ]]; then
   echo "Full search requires a clean tracked Git tree" >&2
   exit 2
 fi
@@ -59,7 +59,8 @@ if [[ "${PETERSON_SEARCH_SMOKE:-0}" == "1" ]]; then
 fi
 mkdir -p "$output/logs"
 
-python -u scripts/run_peterson_search_v12.py --output-dir "$output" --plan-only
+python -u scripts/run_peterson_search_v12.py \
+  --output-dir "$output" --plan-only "${smoke_args[@]}"
 
 python -u scripts/run_peterson_search_v12.py \
   --output-dir "$output" --device "${devices[0]}" \

@@ -14,7 +14,11 @@ if str(ROOT) not in sys.path:
 
 from experiments.peterson_search_v12.common.config import SearchConfig  # noqa: E402
 from experiments.peterson_search_v12.common.identity import git_identity  # noqa: E402
-from experiments.peterson_search_v12.common.runner import run_search, write_plan  # noqa: E402
+from experiments.peterson_search_v12.common.runner import (  # noqa: E402
+    run_search,
+    write_plan,
+    write_smoke_plan,
+)
 
 
 def parse_args() -> argparse.Namespace:
@@ -44,7 +48,11 @@ def main() -> None:
     root = ROOT
     if args.plan_only:
         revision = str(git_identity(root)["revision"] or "unknown")
-        plan = write_plan(args.output_dir, config, revision=revision)
+        plan = (
+            write_smoke_plan(args.output_dir, config, revision=revision)
+            if args.smoke
+            else write_plan(args.output_dir, config, revision=revision)
+        )
         print(f"planned_candidates={plan['candidate_count']}")
         print(f"planned_cells={plan['cell_count']}")
         return
@@ -55,6 +63,7 @@ def main() -> None:
         num_shards=args.num_shards,
         shard_index=args.shard_index,
         max_cells_per_shard=args.max_cells_per_shard,
+        smoke=args.smoke,
     )
     print(
         f"search_shard_complete={summary['completed']}/{summary['planned']} "

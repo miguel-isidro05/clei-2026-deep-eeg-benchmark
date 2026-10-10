@@ -55,6 +55,20 @@ def validate_cell_payload(payload: dict[str, Any]) -> None:
         value = float(payload["validation_metrics"][metric])
         if not math.isfinite(value):
             raise ValueError(f"Non-finite validation metric: {metric}")
+    prediction_keys = ("validation_y_true", "validation_y_pred", "validation_y_score")
+    present = [key in payload for key in prediction_keys]
+    if any(present):
+        if not all(present):
+            raise ValueError("Validation prediction arrays are incomplete")
+        y_true, y_pred, y_score = (payload[key] for key in prediction_keys)
+        if not (len(y_true) == len(y_pred) == len(y_score) and len(y_true) > 0):
+            raise ValueError("Validation prediction arrays have inconsistent length")
+        if any(
+            not math.isfinite(float(score)) or not 0.0 <= float(score) <= 1.0 for score in y_score
+        ):
+            raise ValueError("Validation scores must be finite probabilities")
+        if len(set(y_true)) != 2 or len(set(y_pred)) != 2:
+            raise ValueError("Validation class collapse detected")
 
 
 def audit_results(output_dir: Path, manifest: SearchManifest) -> dict[str, Any]:
@@ -72,15 +86,33 @@ def audit_results(output_dir: Path, manifest: SearchManifest) -> dict[str, Any]:
         payload = json.loads(path.read_text(encoding="utf-8"))
         validate_cell_payload(payload)
         expected_cell = expected[cell_id]
+        if payload["cell_id"] != cell_id:
+            raise ValueError(f"Cell identity mismatch in {cell_id}")
         if payload["config_id"] != expected_cell.config_id:
             raise ValueError(f"Config mismatch in {cell_id}")
+        if payload["subject"] != expected_cell.subject:
+            raise ValueError(f"Subject mismatch in {cell_id}")
+        if payload["seed"] != expected_cell.seed or tuple(payload["folds"]) != expected_cell.folds:
+            raise ValueError(f"Seed or fold mismatch in {cell_id}")
         if payload["fingerprint"]["candidate_sha256"] != expected_cell.candidate_sha256:
             raise ValueError(f"Candidate hash mismatch in {cell_id}")
+        expected_fingerprint = {
+            "config_sha256": manifest.config_sha256,
+            "catalog_sha256": manifest.catalog_sha256,
+            "manifest_sha256": manifest.sha256,
+            "revision": manifest.revision,
+        }
+        if any(
+            payload["fingerprint"].get(key) != value for key, value in expected_fingerprint.items()
+        ):
+            raise ValueError(f"Run fingerprint mismatch in {cell_id}")
         code_hash = str(payload["fingerprint"].get("code_sha256", ""))
         data_hash = str(payload["fingerprint"].get("data_sha256", ""))
         if len(code_hash) != 64 or len(data_hash) != 64:
             raise ValueError(f"Invalid code or data hash in {cell_id}")
         code_hashes.add(code_hash)
+        if payload["fingerprint"].get("git_dirty") is not False:
+            raise ValueError(f"Cell was produced from a dirty Git tree: {cell_id}")
         data_hashes.setdefault(payload["subject"], set()).add(data_hash)
         reports = payload["fold_reports"]
         if not reports or {report["fold"] for report in reports} != {0, 2}:

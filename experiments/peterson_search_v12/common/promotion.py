@@ -22,6 +22,9 @@ def rank_and_promote(payloads: list[dict[str, Any]], *, expected_cells: int) -> 
         raise ValueError("Promotion requires six discovery-subject results for all 36 candidates")
     ranking: list[dict[str, Any]] = []
     for config_id, items in grouped.items():
+        subjects = {item["subject"] for item in items}
+        if len(subjects) != 6:
+            raise ValueError(f"Candidate {config_id} does not contain six unique subjects")
         accuracies = np.asarray(
             [item["validation_metrics"]["accuracy"] for item in items], dtype=float
         )
@@ -39,8 +42,8 @@ def rank_and_promote(payloads: list[dict[str, Any]], *, expected_cells: int) -> 
                     np.mean([item["validation_metrics"]["kappa"] for item in items])
                 ),
                 "parameters": int(items[0]["parameters"]["total"]),
-                "mean_elapsed_seconds": float(
-                    np.mean([item["runtime"]["elapsed_seconds"] for item in items])
+                "mean_inference_seconds_per_trial": float(
+                    np.mean([item["runtime"]["inference_seconds_per_trial"] for item in items])
                 ),
             }
         )
@@ -49,7 +52,7 @@ def rank_and_promote(payloads: list[dict[str, Any]], *, expected_cells: int) -> 
             -item["mean_accuracy"],
             -item["lower_quartile_accuracy"],
             item["parameters"],
-            item["mean_elapsed_seconds"],
+            item["mean_inference_seconds_per_trial"],
             item["config_id"],
         )
     )
@@ -64,11 +67,30 @@ def rank_and_promote(payloads: list[dict[str, Any]], *, expected_cells: int) -> 
             break
     formulations = {item["formulation"] for item in promoted}
     if len(formulations) < 2:
-        alternative = next(
-            (item for item in ranking if item["formulation"] not in formulations), None
-        )
-        if alternative is not None:
-            promoted[-1] = alternative
+        for remove_index in range(len(promoted) - 1, -1, -1):
+            removed = promoted[remove_index]
+            adjusted_counts = backbone_counts.copy()
+            adjusted_counts[removed["backbone"]] -= 1
+            alternative = next(
+                (
+                    item
+                    for item in ranking
+                    if item["formulation"] not in formulations
+                    and item not in promoted
+                    and adjusted_counts[item["backbone"]] < 3
+                ),
+                None,
+            )
+            if alternative is not None:
+                not_completely_dominated = (
+                    alternative["mean_accuracy"] >= removed["mean_accuracy"]
+                    or alternative["parameters"] < removed["parameters"]
+                    or alternative["mean_inference_seconds_per_trial"]
+                    < removed["mean_inference_seconds_per_trial"]
+                )
+                if not_completely_dominated:
+                    promoted[remove_index] = alternative
+                    break
     if len(promoted) != 12:
         raise RuntimeError("Diversity constraints could not promote 12 candidates")
     base = {"ranking": ranking, "promoted": promoted, "expected_cells": expected_cells}

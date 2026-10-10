@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import subprocess
 from pathlib import Path
 
@@ -28,7 +29,10 @@ def _payloads():
                     "subject": subject,
                     "validation_metrics": {"accuracy": accuracy, "kappa": accuracy - 0.5},
                     "parameters": {"total": 1000 + rank},
-                    "runtime": {"elapsed_seconds": 10.0 + rank},
+                    "runtime": {
+                        "elapsed_seconds": 10.0 + rank,
+                        "inference_seconds_per_trial": 0.001 + rank * 1e-6,
+                    },
                 }
             )
     return payloads
@@ -73,6 +77,28 @@ def test_cli_plan_only_does_not_load_data(tmp_path):
     assert "planned_candidates=36" in result.stdout
     assert "planned_cells=216" in result.stdout
     assert not (tmp_path / "cells").exists()
+
+
+def test_cli_smoke_plan_has_exact_two_cell_manifest(tmp_path):
+    subprocess.run(
+        [
+            "python",
+            "scripts/run_peterson_search_v12.py",
+            "--output-dir",
+            str(tmp_path),
+            "--plan-only",
+            "--smoke",
+            "--epochs-override",
+            "1",
+        ],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    manifest = json.loads((tmp_path / "manifests" / "smoke-exp01.json").read_text(encoding="utf-8"))
+    assert len(manifest["cells"]) == 2
+    assert len({cell["cell_id"] for cell in manifest["cells"]}) == 2
+    assert not (tmp_path / "manifests" / "exp01.json").exists()
 
 
 def test_launcher_requires_exp01_and_two_devices():

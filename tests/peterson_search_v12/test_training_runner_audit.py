@@ -8,7 +8,7 @@ from experiments.peterson_search_v12.common.audit import audit_results, validate
 from experiments.peterson_search_v12.common.catalogs import build_exp01_catalog
 from experiments.peterson_search_v12.common.config import SearchConfig
 from experiments.peterson_search_v12.common.manifests import build_manifest
-from experiments.peterson_search_v12.common.runner import write_plan
+from experiments.peterson_search_v12.common.runner import is_resumable_cell, write_plan
 from experiments.peterson_search_v12.common.training import predict_numpy, train_candidate
 
 
@@ -114,3 +114,39 @@ def test_cell_schema_rejects_collapsed_or_inconsistent_validation():
     payload["validation_y_score"] = [0.2]
     with pytest.raises(ValueError, match="length"):
         validate_cell_payload(payload)
+
+
+def test_resumption_requires_the_entire_fingerprint():
+    payload = {
+        "schema_version": 1,
+        "status": "completed",
+        "experiment": "exp01",
+        "cell_id": "exp01-cfg-001__seed0__S09",
+        "config_id": "exp01-cfg-001",
+        "subject": "S09",
+        "seed": 0,
+        "folds": [0, 2],
+        "validation_metrics": {"accuracy": 0.6, "kappa": 0.2},
+        "validation_y_true": [0, 1],
+        "validation_y_pred": [0, 1],
+        "validation_y_score": [0.2, 0.8],
+        "fold_reports": [],
+        "fingerprint": {
+            "candidate_sha256": "a" * 64,
+            "config_sha256": "b" * 64,
+            "catalog_sha256": "c" * 64,
+            "manifest_sha256": "d" * 64,
+            "code_sha256": "e" * 64,
+            "data_sha256": "f" * 64,
+            "split_sha256": "1" * 64,
+            "environment_sha256": "2" * 64,
+            "device": "cuda:0",
+            "revision": "3" * 40,
+            "git_dirty": False,
+        },
+    }
+    assert is_resumable_cell(payload, payload["fingerprint"])
+    for key in ("config_sha256", "data_sha256", "split_sha256", "revision", "device"):
+        changed = dict(payload["fingerprint"])
+        changed[key] = "changed"
+        assert not is_resumable_cell(payload, changed)
