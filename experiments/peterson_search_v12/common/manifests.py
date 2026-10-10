@@ -24,6 +24,7 @@ class CellSpec:
 class SearchManifest:
     experiment: str
     revision: str
+    config_sha256: str
     catalog_sha256: str
     cells: tuple[CellSpec, ...]
     sha256: str
@@ -45,16 +46,19 @@ def build_manifest(
         for seed in config.seeds
         for subject in config.subjects
     )
+    config_sha256 = canonical_sha256(asdict(config))
     catalog_sha256 = canonical_sha256(catalog_payload(catalog))
     base = {
         "experiment": config.experiment,
         "revision": revision,
+        "config_sha256": config_sha256,
         "catalog_sha256": catalog_sha256,
         "cells": [asdict(cell) for cell in cells],
     }
     return SearchManifest(
         experiment=config.experiment,
         revision=revision,
+        config_sha256=config_sha256,
         catalog_sha256=catalog_sha256,
         cells=cells,
         sha256=canonical_sha256(base),
