@@ -14,9 +14,7 @@ def partition_subjects() -> tuple[tuple[str, ...], tuple[str, ...]]:
     ordered = tuple(
         sorted(
             ALL_SUBJECTS,
-            key=lambda subject: hashlib.sha256(
-                f"{PARTITION_SALT}:{subject}".encode("utf-8")
-            ).hexdigest(),
+            key=lambda subject: hashlib.sha256(f"{PARTITION_SALT}:{subject}".encode()).hexdigest(),
         )
     )
     discovery, holdout = ordered[:6], ordered[6:]
@@ -33,4 +31,3 @@ def validate_partition(discovery: tuple[str, ...], holdout: tuple[str, ...]) -> 
         raise ValueError("Discovery and holdout must cover every Peterson subject exactly once")
     if len(discovery) != 6 or len(holdout) != 4:
         raise ValueError("Peterson V12 requires a 6/4 subject partition")
-

@@ -1,8 +1,5 @@
 from __future__ import annotations
 
-import json
-from pathlib import Path
-
 import numpy as np
 import pytest
 import torch
@@ -34,7 +31,9 @@ def test_training_restores_checkpoint_and_is_reproducible(tmp_path):
         checkpoint_path=checkpoint,
     )
     assert checkpoint.is_file()
-    first_logits = predict_numpy(first.model, x[8:], candidate=candidate, config=config, device="cpu", seed=9)
+    first_logits = predict_numpy(
+        first.model, x[8:], candidate=candidate, config=config, device="cpu", seed=9
+    )
     payload = torch.load(checkpoint, map_location="cpu", weights_only=True)
     assert payload["best_epoch"] == first.best_epoch
     second = train_candidate(
@@ -47,7 +46,9 @@ def test_training_restores_checkpoint_and_is_reproducible(tmp_path):
         device="cpu",
         seed=7,
     )
-    second_logits = predict_numpy(second.model, x[8:], candidate=candidate, config=config, device="cpu", seed=9)
+    second_logits = predict_numpy(
+        second.model, x[8:], candidate=candidate, config=config, device="cpu", seed=9
+    )
     assert np.array_equal(first_logits, second_logits)
     assert first.history == second.history
 

@@ -12,12 +12,20 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from experiments.peterson_search_v12.common.audit import audit_results, validate_cell_payload
-from experiments.peterson_search_v12.common.catalogs import build_exp01_catalog
-from experiments.peterson_search_v12.common.config import SearchConfig
-from experiments.peterson_search_v12.common.identity import canonical_sha256
-from experiments.peterson_search_v12.common.io import write_json_atomic
-from experiments.peterson_search_v12.common.manifests import build_manifest
+from experiments.peterson_search_v12.common.audit import (  # noqa: E402
+    audit_results,
+    validate_cell_payload,
+)
+from experiments.peterson_search_v12.common.catalogs import (  # noqa: E402
+    build_exp01_catalog,
+)
+from experiments.peterson_search_v12.common.config import SearchConfig  # noqa: E402
+from experiments.peterson_search_v12.common.identity import (  # noqa: E402
+    canonical_sha256,
+    code_sha256,
+)
+from experiments.peterson_search_v12.common.io import write_json_atomic  # noqa: E402
+from experiments.peterson_search_v12.common.manifests import build_manifest  # noqa: E402
 
 
 def main() -> None:
@@ -52,13 +60,19 @@ def main() -> None:
     if manifest.sha256 != manifest_payload["sha256"]:
         raise SystemExit("manifest drift detected")
     report = audit_results(args.output_dir, manifest)
+    payloads = [
+        json.loads(path.read_text(encoding="utf-8"))
+        for path in sorted((args.output_dir / "cells").glob("*.json"))
+    ]
+    expected_code_hash = code_sha256(ROOT)
+    if {payload["fingerprint"]["code_sha256"] for payload in payloads} != {expected_code_hash}:
+        raise SystemExit("result code hash does not match the current V12 implementation")
     report.update(
         {
             "status": "completed",
             "manifest_sha256": manifest.sha256,
-            "cells_sha256": canonical_sha256(
-                sorted(path.name for path in (args.output_dir / "cells").glob("*.json"))
-            ),
+            "code_sha256": expected_code_hash,
+            "cells_sha256": canonical_sha256(payloads),
         }
     )
     write_json_atomic(args.output_dir / "run_complete.json", report)

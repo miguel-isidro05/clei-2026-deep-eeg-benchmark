@@ -30,8 +30,17 @@ def validate_cell_payload(payload: dict[str, Any]) -> None:
     if leaked:
         raise ValueError(f"Cell contains forbidden outer-test material: {sorted(leaked)}")
     required = {
-        "schema_version", "status", "experiment", "cell_id", "config_id", "subject",
-        "seed", "folds", "validation_metrics", "fold_reports", "fingerprint",
+        "schema_version",
+        "status",
+        "experiment",
+        "cell_id",
+        "config_id",
+        "subject",
+        "seed",
+        "folds",
+        "validation_metrics",
+        "fold_reports",
+        "fingerprint",
     }
     missing = required - set(payload)
     if missing:
@@ -57,6 +66,8 @@ def audit_results(output_dir: Path, manifest: SearchManifest) -> dict[str, Any]:
     extra = sorted(set(found) - set(expected))
     if missing or extra:
         raise ValueError(f"Result set mismatch: missing={len(missing)} extra={len(extra)}")
+    code_hashes: set[str] = set()
+    data_hashes: dict[str, set[str]] = {}
     for cell_id, path in found.items():
         payload = json.loads(path.read_text(encoding="utf-8"))
         validate_cell_payload(payload)
@@ -65,4 +76,27 @@ def audit_results(output_dir: Path, manifest: SearchManifest) -> dict[str, Any]:
             raise ValueError(f"Config mismatch in {cell_id}")
         if payload["fingerprint"]["candidate_sha256"] != expected_cell.candidate_sha256:
             raise ValueError(f"Candidate hash mismatch in {cell_id}")
+        code_hash = str(payload["fingerprint"].get("code_sha256", ""))
+        data_hash = str(payload["fingerprint"].get("data_sha256", ""))
+        if len(code_hash) != 64 or len(data_hash) != 64:
+            raise ValueError(f"Invalid code or data hash in {cell_id}")
+        code_hashes.add(code_hash)
+        data_hashes.setdefault(payload["subject"], set()).add(data_hash)
+        reports = payload["fold_reports"]
+        if not reports or {report["fold"] for report in reports} != {0, 2}:
+            raise ValueError(f"Incomplete fold reports in {cell_id}")
+        split_hashes: set[str] = set()
+        for report in reports:
+            if not report.get("history") or report.get("n_validation_trials", 0) < 1:
+                raise ValueError(f"Incomplete validation history in {cell_id}")
+            for key in ("search_split_sha256", "outer_split_sha256", "outer_test_sha256"):
+                if len(str(report.get(key, ""))) != 64:
+                    raise ValueError(f"Invalid split fingerprint in {cell_id}")
+            split_hashes.add(report["search_split_sha256"])
+        if len(split_hashes) != len(reports):
+            raise ValueError(f"Duplicate split report in {cell_id}")
+    if len(code_hashes) != 1:
+        raise ValueError("Results mix multiple code revisions")
+    if any(len(hashes) != 1 for hashes in data_hashes.values()):
+        raise ValueError("Results mix multiple data identities for one subject")
     return {"complete": True, "expected": len(expected), "found": len(found)}

@@ -45,4 +45,3 @@ def build_exp01_catalog(config: SearchConfig) -> tuple[CandidateSpec, ...]:
 
 def catalog_payload(catalog: tuple[CandidateSpec, ...]) -> list[dict[str, object]]:
     return [asdict(candidate) for candidate in catalog]
-

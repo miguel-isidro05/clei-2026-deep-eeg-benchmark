@@ -12,9 +12,9 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from experiments.peterson_search_v12.common.config import SearchConfig
-from experiments.peterson_search_v12.common.identity import git_identity
-from experiments.peterson_search_v12.common.runner import run_search, write_plan
+from experiments.peterson_search_v12.common.config import SearchConfig  # noqa: E402
+from experiments.peterson_search_v12.common.identity import git_identity  # noqa: E402
+from experiments.peterson_search_v12.common.runner import run_search, write_plan  # noqa: E402
 
 
 def parse_args() -> argparse.Namespace:

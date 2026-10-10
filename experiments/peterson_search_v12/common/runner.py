@@ -5,7 +5,7 @@ from __future__ import annotations
 import importlib.metadata
 import platform
 import time
-from dataclasses import asdict, replace
+from dataclasses import asdict
 from pathlib import Path
 from typing import Any
 
@@ -24,7 +24,7 @@ from deepbench.preprocessing import (
 from .audit import validate_cell_payload
 from .catalogs import CandidateSpec, build_exp01_catalog, catalog_payload
 from .config import SearchConfig
-from .identity import canonical_sha256, code_sha256, git_identity
+from .identity import code_sha256, git_identity
 from .io import write_json_atomic
 from .manifests import CellSpec, SearchManifest, build_manifest, shard_cells
 from .models import parameter_report
@@ -67,9 +67,7 @@ def write_plan(output_dir: Path, config: SearchConfig, *, revision: str) -> dict
 
 def _clean_preprocessing_report(report: dict[str, Any]) -> dict[str, Any]:
     cleaned = dict(report)
-    cleaned["post_preprocessing_validation_sha256"] = cleaned.pop(
-        "post_preprocessing_test_sha256"
-    )
+    cleaned["post_preprocessing_validation_sha256"] = cleaned.pop("post_preprocessing_test_sha256")
     cleaned["n_validation_trials"] = cleaned.pop("n_test_trials")
     return cleaned
 
@@ -160,7 +158,9 @@ def _run_cell(
         predictions.extend(int(value) for value in fold_pred)
         scores.extend(float(value) for value in fold_score)
         if device.startswith("cuda"):
-            peak_memory = max(peak_memory, int(torch.cuda.max_memory_allocated(torch.device(device))))
+            peak_memory = max(
+                peak_memory, int(torch.cuda.max_memory_allocated(torch.device(device)))
+            )
         fold_reports.append(
             {
                 "session": split.session,

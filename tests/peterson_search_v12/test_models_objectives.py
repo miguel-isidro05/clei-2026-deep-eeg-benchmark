@@ -40,14 +40,20 @@ def test_compact_is_smaller_than_wide_and_deterministic(backbone):
     compact = next(
         item
         for item in candidates
-        if item.backbone == backbone and item.formulation == "discriminative" and item.width == "compact"
+        if item.backbone == backbone
+        and item.formulation == "discriminative"
+        and item.width == "compact"
     )
     wide = next(
         item
         for item in candidates
-        if item.backbone == backbone and item.formulation == "discriminative" and item.width == "wide"
+        if item.backbone == backbone
+        and item.formulation == "discriminative"
+        and item.width == "wide"
     )
-    assert parameter_report(compact, n_chans=15)["total"] < parameter_report(wide, n_chans=15)["total"]
+    assert (
+        parameter_report(compact, n_chans=15)["total"] < parameter_report(wide, n_chans=15)["total"]
+    )
     assert parameter_report(wide, n_chans=15)["total"] < 1_000_000
     torch.manual_seed(19)
     model = make_candidate_model(compact, n_chans=3).eval()

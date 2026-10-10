@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 import subprocess
 from pathlib import Path
 
@@ -71,8 +70,8 @@ def test_cli_plan_only_does_not_load_data(tmp_path):
 
 def test_launcher_requires_exp01_and_two_devices():
     text = Path("run_peterson_search_cayetano.sh").read_text(encoding="utf-8")
-    assert 'PETERSON_SEARCH_EXPERIMENT:?Set PETERSON_SEARCH_EXPERIMENT=exp01' in text
-    assert 'PETERSON_SEARCH_DEVICES' in text
-    assert '--num-shards 2 --shard-index 0' in text
-    assert '--num-shards 2 --shard-index 1' in text
-    assert 'run_complete.json' not in text
+    assert "PETERSON_SEARCH_EXPERIMENT:?Set PETERSON_SEARCH_EXPERIMENT=exp01" in text
+    assert "PETERSON_SEARCH_DEVICES" in text
+    assert "--num-shards 2 --shard-index 0" in text
+    assert "--num-shards 2 --shard-index 1" in text
+    assert "run_complete.json" not in text

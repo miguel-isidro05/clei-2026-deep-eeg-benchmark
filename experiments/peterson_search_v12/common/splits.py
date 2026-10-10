@@ -4,11 +4,12 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-import numpy as np
-
 from deepbench.types import SubjectRecording
 from experiments.peterson_diffusion_v11.identity import canonical_sha256
-from experiments.peterson_diffusion_v11.splits import train_validation_indices, within_session_splits
+from experiments.peterson_diffusion_v11.splits import (
+    train_validation_indices,
+    within_session_splits,
+)
 
 
 @dataclass(frozen=True)
@@ -52,4 +53,3 @@ def build_search_splits(
     if not selected:
         raise ValueError("No search splits matched the requested folds")
     return tuple(selected)
-

@@ -1,8 +1,8 @@
 # Peterson Model Search V12: diseño experimental
 
-Fecha: 2026-10-10  
-Rama: `exp/peterson-model-search-v12`  
-Base inmutable: `exp/peterson-diffusion-v11@de0813d`  
+Fecha: 2026-10-10
+Rama: `exp/peterson-model-search-v12`
+Base inmutable: `exp/peterson-diffusion-v11@de0813d`
 Baseline confirmatorio: Peterson V10, revisión `6c116d5`
 
 ## 1. Objetivo

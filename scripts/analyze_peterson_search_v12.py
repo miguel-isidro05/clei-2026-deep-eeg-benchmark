@@ -12,9 +12,9 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from experiments.peterson_search_v12.common.identity import canonical_sha256
-from experiments.peterson_search_v12.common.io import write_json_atomic
-from experiments.peterson_search_v12.common.promotion import rank_and_promote
+from experiments.peterson_search_v12.common.identity import canonical_sha256  # noqa: E402
+from experiments.peterson_search_v12.common.io import write_json_atomic  # noqa: E402
+from experiments.peterson_search_v12.common.promotion import rank_and_promote  # noqa: E402
 
 
 def main() -> None:

@@ -7,8 +7,15 @@ from dataclasses import dataclass
 import torch
 from torch.nn import functional as F
 
-from experiments.peterson_diffusion_v11.diffusion import DiffusionSchedule, sample_timesteps_and_noise
-from experiments.peterson_diffusion_v11.energy import class_energies, energy_probabilities, masked_mse
+from experiments.peterson_diffusion_v11.diffusion import (
+    DiffusionSchedule,
+    sample_timesteps_and_noise,
+)
+from experiments.peterson_diffusion_v11.energy import (
+    class_energies,
+    energy_probabilities,
+    masked_mse,
+)
 
 from .catalogs import CandidateSpec
 from .models import CandidateModel

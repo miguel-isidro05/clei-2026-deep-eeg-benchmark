@@ -75,4 +75,3 @@ def load_stage_config(stage: str, *, decision_dir: Path | str) -> SearchConfig:
     if payload.get("status") != "approved" or not payload.get("results_sha256"):
         raise ValueError(f"{stage} decision is not approved and content-addressed")
     raise NotImplementedError(f"{stage} has not been specified yet")
-

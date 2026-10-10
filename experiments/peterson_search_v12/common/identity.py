@@ -5,7 +5,11 @@ from __future__ import annotations
 import hashlib
 from pathlib import Path
 
-from experiments.peterson_diffusion_v11.identity import canonical_json, canonical_sha256, git_identity
+from experiments.peterson_diffusion_v11.identity import (
+    canonical_json,
+    canonical_sha256,
+    git_identity,
+)
 
 
 def code_sha256(root: Path) -> str:
@@ -21,4 +25,3 @@ def code_sha256(root: Path) -> str:
 
 
 __all__ = ["canonical_json", "canonical_sha256", "code_sha256", "git_identity"]
-

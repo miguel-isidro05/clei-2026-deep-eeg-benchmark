@@ -1,10 +1,10 @@
 # Peterson Model Search V12: plan de implementación TDD
 
-Fecha: 2026-10-10  
-Rama: `exp/peterson-model-search-v12`  
-Worktree: `benchmark_deep_v2_search_v12`  
-Especificación: `docs/superpowers/specs/2026-10-10-peterson-model-search-v12-design.md`  
-Entorno local: `eeg-diffusion`  
+Fecha: 2026-10-10
+Rama: `exp/peterson-model-search-v12`
+Worktree: `benchmark_deep_v2_search_v12`
+Especificación: `docs/superpowers/specs/2026-10-10-peterson-model-search-v12-design.md`
+Entorno local: `eeg-diffusion`
 Entorno Cayetano: `deep-eeg-clei`
 
 ## 1. Resultado de esta implementación

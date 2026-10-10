@@ -27,7 +27,9 @@ class TrainingOutcome:
     updates: int
 
 
-def _loader(x: np.ndarray, y: np.ndarray, *, batch_size: int, seed: int, shuffle: bool) -> DataLoader:
+def _loader(
+    x: np.ndarray, y: np.ndarray, *, batch_size: int, seed: int, shuffle: bool
+) -> DataLoader:
     return DataLoader(
         TensorDataset(
             torch.from_numpy(np.ascontiguousarray(x, dtype=np.float32)),
@@ -91,9 +93,7 @@ def train_candidate(
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
         optimizer, T_max=max(1, config.epochs - 1)
     )
-    train_loader = _loader(
-        x_train, y_train, batch_size=config.batch_size, seed=seed, shuffle=True
-    )
+    train_loader = _loader(x_train, y_train, batch_size=config.batch_size, seed=seed, shuffle=True)
     validation_loader = _loader(
         x_validation, y_validation, batch_size=config.batch_size, seed=seed, shuffle=False
     )
@@ -205,4 +205,3 @@ def predict_numpy(
             )
             batches.append(probabilities.cpu().numpy())
     return np.concatenate(batches)
-

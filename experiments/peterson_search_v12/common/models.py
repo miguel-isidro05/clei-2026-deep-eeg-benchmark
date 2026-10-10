@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import math
-from dataclasses import dataclass
 
 import torch
 from torch import nn
@@ -36,8 +35,7 @@ class InceptionStem(nn.Module):
         super().__init__()
         branch = max(2, hidden // 4)
         self.branches = nn.ModuleList(
-            nn.Conv1d(n_chans, branch, kernel, padding=kernel // 2)
-            for kernel in (9, 17, 33, 65)
+            nn.Conv1d(n_chans, branch, kernel, padding=kernel // 2) for kernel in (9, 17, 33, 65)
         )
         self.project = nn.Conv1d(branch * 4, hidden, 1)
 
@@ -142,7 +140,12 @@ class CandidateModel(nn.Module):
 
 def make_candidate_model(candidate: CandidateSpec, *, n_chans: int) -> CandidateModel:
     if candidate.backbone not in {
-        "residual", "tcn", "inception", "filterbank", "smooth_basis", "conformer_lite"
+        "residual",
+        "tcn",
+        "inception",
+        "filterbank",
+        "smooth_basis",
+        "conformer_lite",
     }:
         raise ValueError(f"Unknown backbone: {candidate.backbone}")
     if candidate.formulation not in {"discriminative", "diffusion_energy", "hybrid"}:
@@ -162,4 +165,3 @@ def parameter_report(candidate: CandidateSpec, *, n_chans: int) -> dict[str, int
         "total": sum(parameter.numel() for parameter in model.parameters()),
         "backbone": sum(parameter.numel() for parameter in model.backbone.parameters()),
     }
-
