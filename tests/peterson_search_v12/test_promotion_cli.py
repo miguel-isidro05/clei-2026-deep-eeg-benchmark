@@ -50,6 +50,13 @@ def test_promotion_rejects_partial_results():
         rank_and_promote(_payloads()[:-1], expected_cells=216)
 
 
+def test_promotion_rejects_duplicate_subjects():
+    payloads = _payloads()
+    payloads[1]["subject"] = payloads[0]["subject"]
+    with pytest.raises(ValueError, match="subjects"):
+        rank_and_promote(payloads, expected_cells=216)
+
+
 def test_cli_plan_only_does_not_load_data(tmp_path):
     result = subprocess.run(
         [

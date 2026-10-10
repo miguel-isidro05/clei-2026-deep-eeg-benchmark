@@ -89,3 +89,28 @@ def test_audit_requires_exact_manifest(tmp_path):
     manifest = build_manifest(config, catalog, revision="abc123")
     with pytest.raises(ValueError, match="missing"):
         audit_results(tmp_path, manifest)
+
+
+def test_cell_schema_rejects_collapsed_or_inconsistent_validation():
+    payload = {
+        "schema_version": 1,
+        "status": "completed",
+        "experiment": "exp01",
+        "cell_id": "exp01-cfg-001__seed0__S09",
+        "config_id": "exp01-cfg-001",
+        "subject": "S09",
+        "seed": 0,
+        "folds": [0, 2],
+        "validation_metrics": {"accuracy": 0.5, "kappa": 0.0},
+        "validation_y_true": [0, 1],
+        "validation_y_pred": [0, 0],
+        "validation_y_score": [0.5, 0.5],
+        "fold_reports": [],
+        "fingerprint": {"candidate_sha256": "a" * 64, "code_sha256": "b" * 64},
+    }
+    with pytest.raises(ValueError, match="collapse"):
+        validate_cell_payload(payload)
+    payload["validation_y_pred"] = [0, 1]
+    payload["validation_y_score"] = [0.2]
+    with pytest.raises(ValueError, match="length"):
+        validate_cell_payload(payload)
