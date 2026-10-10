@@ -1,12 +1,20 @@
 from __future__ import annotations
 
+import json
+from dataclasses import asdict
+
 import numpy as np
 import pytest
 import torch
 
-from experiments.peterson_search_v12.common.audit import audit_results, validate_cell_payload
+from experiments.peterson_search_v12.common.audit import (
+    audit_results,
+    validate_cell_payload,
+    validate_verifiable_fingerprints,
+)
 from experiments.peterson_search_v12.common.catalogs import build_exp01_catalog
 from experiments.peterson_search_v12.common.config import SearchConfig
+from experiments.peterson_search_v12.common.identity import canonical_sha256
 from experiments.peterson_search_v12.common.manifests import build_manifest
 from experiments.peterson_search_v12.common.runner import is_resumable_cell, write_plan
 from experiments.peterson_search_v12.common.training import predict_numpy, train_candidate
@@ -150,3 +158,35 @@ def test_resumption_requires_the_entire_fingerprint():
         changed = dict(payload["fingerprint"])
         changed[key] = "changed"
         assert not is_resumable_cell(payload, changed)
+
+
+def test_verifiable_fingerprints_reject_candidate_split_environment_and_device_tampering():
+    candidate = asdict(build_exp01_catalog(SearchConfig())[0])
+    reports = [
+        {"search_split_sha256": "1" * 64},
+        {"search_split_sha256": "2" * 64},
+    ]
+    environment = {"device": "cuda:0", "torch": "test"}
+    payload = {
+        "candidate": candidate,
+        "fold_reports": reports,
+        "runtime": {"environment": environment},
+        "fingerprint": {
+            "candidate_sha256": candidate["sha256"],
+            "split_sha256": canonical_sha256([report["search_split_sha256"] for report in reports]),
+            "environment_sha256": canonical_sha256(environment),
+            "device": "cuda:0",
+        },
+    }
+    validate_verifiable_fingerprints(payload)
+    corruptions = (
+        ("candidate", "backbone", "tampered"),
+        ("fingerprint", "split_sha256", "0" * 64),
+        ("fingerprint", "environment_sha256", "0" * 64),
+        ("fingerprint", "device", "cuda:1"),
+    )
+    for section, key, value in corruptions:
+        changed = json.loads(json.dumps(payload))
+        changed[section][key] = value
+        with pytest.raises(ValueError, match="mismatch"):
+            validate_verifiable_fingerprints(changed)

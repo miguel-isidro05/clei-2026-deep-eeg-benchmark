@@ -7,6 +7,7 @@ import math
 from pathlib import Path
 from typing import Any
 
+from .identity import canonical_sha256
 from .manifests import SearchManifest
 from .partitions import DISCOVERY_SUBJECTS, HOLDOUT_SUBJECTS
 
@@ -71,6 +72,31 @@ def validate_cell_payload(payload: dict[str, Any], *, allow_collapse: bool = Fal
             raise ValueError("Validation class collapse detected")
 
 
+def validate_verifiable_fingerprints(payload: dict[str, Any]) -> None:
+    candidate = payload.get("candidate")
+    if not isinstance(candidate, dict) or "sha256" not in candidate:
+        raise ValueError("Missing candidate identity")
+    candidate_body = {key: value for key, value in candidate.items() if key != "sha256"}
+    declared_candidate_hash = candidate["sha256"]
+    if canonical_sha256(candidate_body) != declared_candidate_hash:
+        raise ValueError("Candidate metadata hash mismatch")
+    if payload.get("fingerprint", {}).get("candidate_sha256") != declared_candidate_hash:
+        raise ValueError("Candidate fingerprint mismatch")
+    reports = payload.get("fold_reports")
+    if not isinstance(reports, list) or not reports:
+        raise ValueError("Missing fold reports")
+    split_hash = canonical_sha256([report.get("search_split_sha256") for report in reports])
+    if payload["fingerprint"].get("split_sha256") != split_hash:
+        raise ValueError("Split fingerprint mismatch")
+    runtime_environment = payload.get("runtime", {}).get("environment")
+    if not isinstance(runtime_environment, dict):
+        raise ValueError("Missing runtime environment")
+    if payload["fingerprint"].get("device") != runtime_environment.get("device"):
+        raise ValueError("Runtime device mismatch")
+    if payload["fingerprint"].get("environment_sha256") != canonical_sha256(runtime_environment):
+        raise ValueError("Runtime environment mismatch")
+
+
 def audit_results(output_dir: Path, manifest: SearchManifest) -> dict[str, Any]:
     cells_dir = output_dir / "cells"
     paths = sorted(cells_dir.glob("*.json")) if cells_dir.is_dir() else []
@@ -85,6 +111,7 @@ def audit_results(output_dir: Path, manifest: SearchManifest) -> dict[str, Any]:
     for cell_id, path in found.items():
         payload = json.loads(path.read_text(encoding="utf-8"))
         validate_cell_payload(payload)
+        validate_verifiable_fingerprints(payload)
         expected_cell = expected[cell_id]
         if payload["cell_id"] != cell_id:
             raise ValueError(f"Cell identity mismatch in {cell_id}")

@@ -12,9 +12,11 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
+from deepbench.datasets import load_subject  # noqa: E402
 from experiments.peterson_search_v12.common.audit import (  # noqa: E402
     audit_results,
     validate_cell_payload,
+    validate_verifiable_fingerprints,
 )
 from experiments.peterson_search_v12.common.catalogs import (  # noqa: E402
     build_exp01_catalog,
@@ -26,6 +28,8 @@ from experiments.peterson_search_v12.common.identity import (  # noqa: E402
 )
 from experiments.peterson_search_v12.common.io import write_json_atomic  # noqa: E402
 from experiments.peterson_search_v12.common.manifests import build_manifest  # noqa: E402
+from experiments.peterson_search_v12.common.runner import runtime_environment  # noqa: E402
+from experiments.peterson_search_v12.common.splits import build_search_splits  # noqa: E402
 
 
 def main() -> None:
@@ -50,6 +54,7 @@ def main() -> None:
         for path in paths:
             payload = json.loads(path.read_text(encoding="utf-8"))
             validate_cell_payload(payload, allow_collapse=True)
+            validate_verifiable_fingerprints(payload)
             cell = expected[path.stem]
             if any(
                 (
@@ -91,6 +96,24 @@ def main() -> None:
     expected_code_hash = code_sha256(ROOT)
     if {payload["fingerprint"]["code_sha256"] for payload in payloads} != {expected_code_hash}:
         raise SystemExit("result code hash does not match the current V12 implementation")
+    expected_subject_fingerprints = {}
+    for subject in config.subjects:
+        recording = load_subject("MI-OpenBCI", subject)
+        splits = build_search_splits(recording, folds=config.folds, split_seed=config.split_seed)
+        expected_subject_fingerprints[subject] = {
+            "data_sha256": recording.data_sha256,
+            "split_sha256": canonical_sha256([split.sha256 for split in splits]),
+        }
+    for payload in payloads:
+        fingerprint = payload["fingerprint"]
+        expected_subject = expected_subject_fingerprints[payload["subject"]]
+        if any(fingerprint[key] != value for key, value in expected_subject.items()):
+            raise SystemExit(f"dataset or split drift in {payload['cell_id']}")
+        device = fingerprint["device"]
+        if device not in {"cuda:0", "cuda:1"}:
+            raise SystemExit(f"unexpected full-run device in {payload['cell_id']}: {device}")
+        if fingerprint["environment_sha256"] != canonical_sha256(runtime_environment(device)):
+            raise SystemExit(f"environment drift in {payload['cell_id']}")
     report.update(
         {
             "status": "completed",

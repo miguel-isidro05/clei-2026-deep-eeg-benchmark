@@ -97,7 +97,7 @@ def _clean_preprocessing_report(report: dict[str, Any]) -> dict[str, Any]:
     return cleaned
 
 
-def _environment(device: str) -> dict[str, Any]:
+def runtime_environment(device: str) -> dict[str, Any]:
     packages: dict[str, str | None] = {}
     for package in ("torch", "numpy", "scipy", "scikit-learn", "mne"):
         try:
@@ -256,7 +256,7 @@ def _run_cell(
             "elapsed_seconds": elapsed,
             "inference_seconds_per_trial": inference_per_trial,
             "peak_device_memory_bytes": peak_memory,
-            "environment": _environment(device),
+            "environment": runtime_environment(device),
         },
         "fingerprint": fingerprint,
     }
@@ -292,7 +292,7 @@ def run_search(
         cells = cells[:max_cells_per_shard]
     code_hash = code_sha256(root)
     config_hash = canonical_sha256(asdict(config))
-    environment = _environment(device)
+    environment = runtime_environment(device)
     environment_hash = canonical_sha256(environment)
     recording_cache: dict[str, Any] = {}
     split_cache: dict[str, Any] = {}
