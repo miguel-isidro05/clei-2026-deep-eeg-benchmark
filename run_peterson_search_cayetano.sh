@@ -15,6 +15,33 @@ if [[ "${#devices[@]}" -ne 2 || "${devices[0]}" != cuda:* || "${devices[1]}" != 
   echo "PETERSON_SEARCH_DEVICES must contain exactly two CUDA devices" >&2
   exit 2
 fi
+if [[ "${devices[0]}" == "${devices[1]}" ]]; then
+  echo "PETERSON_SEARCH_DEVICES must name two distinct CUDA devices" >&2
+  exit 2
+fi
+
+python - "${devices[@]}" <<'PY'
+import sys
+
+import torch
+
+requested = [int(value.split(":", 1)[1]) for value in sys.argv[1:]]
+available = torch.cuda.device_count()
+if not torch.cuda.is_available() or available < 2:
+    raise SystemExit(f"Two CUDA devices are required; detected={available}")
+if any(index < 0 or index >= available for index in requested):
+    raise SystemExit(f"Requested CUDA index outside available range: {requested}")
+print(f"cuda_preflight=OK devices={requested}")
+PY
+
+: "${CLEI_DATA_DIR:?Set CLEI_DATA_DIR to the Peterson MI-OpenBCI directory}"
+for subject in S09 S03 S02 S10 S12 S08; do
+  if [[ ! -f "$CLEI_DATA_DIR/$subject.mat" ]]; then
+    echo "Missing Peterson discovery file: $CLEI_DATA_DIR/$subject.mat" >&2
+    exit 2
+  fi
+done
+echo "peterson_data_preflight=OK subjects=6"
 
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$root"
