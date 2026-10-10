@@ -1,0 +1,13 @@
+{
+  "experiment": "exp01",
+  "dataset": "MI-OpenBCI",
+  "task": "motor_imagery_vs_rest",
+  "protocol": "within_session",
+  "condition": "overlap",
+  "folds": [0, 2],
+  "seeds": [0],
+  "epochs": 80,
+  "patience": 20,
+  "batch_size": 64,
+  "split_seed": 2026
+}

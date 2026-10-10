@@ -5,6 +5,7 @@ __pycache__/
 .ruff_cache/
 .venv/
 results/
+results_peterson_search_v12/
 results_diffusion_v11/
 *.pt
 *.pth
