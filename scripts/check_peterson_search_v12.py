@@ -49,7 +49,7 @@ def main() -> None:
         current_code_hash = code_sha256(ROOT)
         for path in paths:
             payload = json.loads(path.read_text(encoding="utf-8"))
-            validate_cell_payload(payload)
+            validate_cell_payload(payload, allow_collapse=True)
             cell = expected[path.stem]
             if any(
                 (

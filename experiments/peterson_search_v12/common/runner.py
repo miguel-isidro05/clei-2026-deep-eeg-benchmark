@@ -116,9 +116,14 @@ def _environment(device: str) -> dict[str, Any]:
     }
 
 
-def is_resumable_cell(payload: dict[str, Any], expected_fingerprint: dict[str, Any]) -> bool:
+def is_resumable_cell(
+    payload: dict[str, Any],
+    expected_fingerprint: dict[str, Any],
+    *,
+    allow_collapse: bool = False,
+) -> bool:
     try:
-        validate_cell_payload(payload)
+        validate_cell_payload(payload, allow_collapse=allow_collapse)
     except (ValueError, KeyError, TypeError):
         return False
     return payload.get("fingerprint") == expected_fingerprint
@@ -134,6 +139,7 @@ def _run_cell(
     fingerprint: dict[str, Any],
     recording: Any,
     splits: Any,
+    allow_collapse: bool,
 ) -> dict[str, Any]:
     started = time.perf_counter()
     if device.startswith("cuda"):
@@ -254,7 +260,7 @@ def _run_cell(
         },
         "fingerprint": fingerprint,
     }
-    validate_cell_payload(payload)
+    validate_cell_payload(payload, allow_collapse=allow_collapse)
     return payload
 
 
@@ -320,7 +326,7 @@ def run_search(
                 import json
 
                 existing = json.loads(path.read_text(encoding="utf-8"))
-                if is_resumable_cell(existing, fingerprint):
+                if is_resumable_cell(existing, fingerprint, allow_collapse=smoke):
                     completed += 1
                     print(f"skipped {path.name}", flush=True)
                     continue
@@ -335,6 +341,7 @@ def run_search(
             fingerprint=fingerprint,
             recording=recording,
             splits=splits,
+            allow_collapse=smoke,
         )
         write_json_atomic(path, payload)
         completed += 1

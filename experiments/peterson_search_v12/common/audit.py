@@ -25,7 +25,7 @@ def _walk_keys(value: Any) -> list[str]:
     return keys
 
 
-def validate_cell_payload(payload: dict[str, Any]) -> None:
+def validate_cell_payload(payload: dict[str, Any], *, allow_collapse: bool = False) -> None:
     leaked = FORBIDDEN_KEYS & set(_walk_keys(payload))
     if leaked:
         raise ValueError(f"Cell contains forbidden outer-test material: {sorted(leaked)}")
@@ -67,7 +67,7 @@ def validate_cell_payload(payload: dict[str, Any]) -> None:
             not math.isfinite(float(score)) or not 0.0 <= float(score) <= 1.0 for score in y_score
         ):
             raise ValueError("Validation scores must be finite probabilities")
-        if len(set(y_true)) != 2 or len(set(y_pred)) != 2:
+        if not allow_collapse and (len(set(y_true)) != 2 or len(set(y_pred)) != 2):
             raise ValueError("Validation class collapse detected")
 
 
