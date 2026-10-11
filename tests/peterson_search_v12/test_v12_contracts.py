@@ -1,11 +1,15 @@
 from __future__ import annotations
 
+import json
 from dataclasses import replace
+from pathlib import Path
 
 import numpy as np
 import pytest
+import torch
 
 from deepbench.types import SubjectRecording
+from experiments.peterson_diffusion_v11.diffusion import DiffusionSchedule
 from experiments.peterson_search_v12.common.catalogs import build_exp01_catalog
 from experiments.peterson_search_v12.common.config import SearchConfig, load_stage_config
 from experiments.peterson_search_v12.common.manifests import build_manifest, shard_cells
@@ -37,6 +41,8 @@ def test_exp01_contract_and_holdout_boundary(tmp_path):
     assert config.dataset == "MI-OpenBCI"
     assert config.protocol == "within_session"
     assert config.condition == "overlap"
+    assert config.diffusion_steps == 1000
+    assert DiffusionSchedule(config.diffusion_steps).alpha_bars(torch.device("cpu"))[-1] < 1e-3
     config.validate_subjects(DISCOVERY_SUBJECTS)
     with pytest.raises(ValueError, match="holdout"):
         config.validate_subjects(("S07",))
@@ -46,9 +52,46 @@ def test_exp01_contract_and_holdout_boundary(tmp_path):
         ("dataset", "Souza2023"),
         ("protocol", "loso"),
         ("condition", "center"),
+        ("diffusion_steps", 100),
     ):
         with pytest.raises(ValueError):
             replace(config, **{field: value})
+
+
+def test_exp01_declarative_config_matches_the_frozen_runtime_contract():
+    config = SearchConfig()
+    path = (
+        Path(__file__).resolve().parents[2]
+        / "experiments/peterson_search_v12/exp01_architecture_formulation/config.json"
+    )
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    for field in (
+        "experiment",
+        "dataset",
+        "task",
+        "protocol",
+        "condition",
+        "epochs",
+        "patience",
+        "batch_size",
+        "split_seed",
+        "learning_rate",
+        "weight_decay",
+        "inference_k",
+        "rank_margin",
+        "lambda_denoise",
+        "lambda_rank",
+        "lambda_consistency",
+    ):
+        assert payload[field] == getattr(config, field)
+    for field in ("folds", "seeds", "backbones", "formulations", "widths"):
+        assert tuple(payload[field]) == getattr(config, field)
+    assert payload["diffusion_schedule"] == {
+        "type": "linear",
+        "steps": config.diffusion_steps,
+        "beta_start": 1e-4,
+        "beta_end": 2e-2,
+    }
 
 
 def test_subject_partition_is_frozen_and_complete():

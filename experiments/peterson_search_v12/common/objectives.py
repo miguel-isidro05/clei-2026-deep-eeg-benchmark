@@ -43,17 +43,20 @@ def candidate_loss(
     *,
     candidate: CandidateSpec,
     seed: int,
-    diffusion_steps: int = 100,
+    diffusion_steps: int = 1000,
     rank_margin: float = 0.1,
     lambda_denoise: float = 1.0,
     lambda_rank: float = 0.2,
     lambda_consistency: float = 0.1,
 ) -> LossTerms:
-    logits = model.classify(x, channel_mask)
-    classification = F.cross_entropy(logits, y)
-    zero = classification.new_zeros(())
     if candidate.formulation == "discriminative":
+        classification = F.cross_entropy(model.classify(x, channel_mask), y)
+        zero = classification.new_zeros(())
         return LossTerms(classification, classification, zero, zero, zero)
+
+    zero = x.new_zeros(())
+    logits = model.classify(x, channel_mask) if candidate.formulation == "hybrid" else None
+    classification = F.cross_entropy(logits, y) if logits is not None else zero
 
     schedule = DiffusionSchedule(diffusion_steps)
     generator = _generator(x.device, seed)
@@ -68,7 +71,11 @@ def candidate_loss(
     ranking = F.relu(rank_margin + true_energy - wrong_energy).mean()
     energy_probs = torch.softmax(torch.stack((-true_energy, -wrong_energy), dim=1), dim=1)
     true_first = torch.where(y[:, None] == 0, energy_probs, energy_probs.flip(1))
-    consistency = F.mse_loss(torch.softmax(logits, dim=1), true_first.detach())
+    consistency = (
+        F.mse_loss(torch.softmax(logits, dim=1), true_first.detach())
+        if logits is not None
+        else zero
+    )
     if candidate.formulation == "diffusion_energy":
         total = lambda_denoise * denoising + lambda_rank * ranking
     else:
@@ -89,7 +96,7 @@ def predict_probabilities(
     candidate: CandidateSpec,
     seed: int,
     inference_k: int,
-    diffusion_steps: int = 100,
+    diffusion_steps: int = 1000,
 ) -> torch.Tensor:
     if candidate.formulation == "discriminative":
         return torch.softmax(model.classify(x, channel_mask), dim=1)

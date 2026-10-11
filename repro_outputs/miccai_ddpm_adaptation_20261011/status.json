@@ -1,0 +1,14 @@
+{
+  "status": "implementation_verified_results_pending",
+  "date": "2026-10-11",
+  "public_source_revision": "6d7240564d46ff950288325bd9bdcbcf40747212",
+  "integration_base_revision": "c650259d866c86189ea4592176e2920794e559ab",
+  "candidate_count": 36,
+  "expected_discovery_cells": 216,
+  "mac_mps_smoke_cells": 4,
+  "v12_tests_passed": 72,
+  "repository_tests_passed": 251,
+  "lint_passed": true,
+  "scientific_results_complete": false,
+  "requires_new_output_directory": true
+}

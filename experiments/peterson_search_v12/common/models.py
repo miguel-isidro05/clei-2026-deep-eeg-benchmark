@@ -61,16 +61,24 @@ class FilterBankStem(nn.Module):
 
 
 class EEGBackbone(nn.Module):
-    def __init__(self, name: str, n_chans: int, hidden: int) -> None:
+    def __init__(
+        self,
+        name: str,
+        n_chans: int,
+        hidden: int,
+        *,
+        conditioning_channels: int = 0,
+    ) -> None:
         super().__init__()
+        stem_channels = n_chans + conditioning_channels
         if name == "inception":
-            self.stem: nn.Module = InceptionStem(n_chans, hidden)
+            self.stem: nn.Module = InceptionStem(stem_channels, hidden)
         elif name == "filterbank":
-            self.stem = FilterBankStem(n_chans, hidden)
+            self.stem = FilterBankStem(stem_channels, hidden)
         elif name == "smooth_basis":
-            self.stem = SmoothBasisConv1d(n_chans, hidden, kernel_size=33)
+            self.stem = SmoothBasisConv1d(stem_channels, hidden, kernel_size=33)
         else:
-            self.stem = nn.Conv1d(n_chans, hidden, 9, padding=4)
+            self.stem = nn.Conv1d(stem_channels, hidden, 9, padding=4)
         if name == "tcn":
             self.sequence: nn.Module = nn.Sequential(
                 ResidualBlock(hidden, dilation=1),
@@ -90,6 +98,7 @@ class EEGBackbone(nn.Module):
             self.sequence = nn.Sequential(ResidualBlock(hidden), ResidualBlock(hidden, dilation=2))
         self.name = name
         self.hidden = hidden
+        self.conditioning_channels = conditioning_channels
 
     def encode(
         self,
@@ -97,9 +106,17 @@ class EEGBackbone(nn.Module):
         channel_mask: torch.Tensor,
         conditioning: torch.Tensor | None = None,
     ) -> torch.Tensor:
-        hidden = self.stem(x * channel_mask.unsqueeze(-1))
-        if conditioning is not None:
-            hidden = hidden + conditioning.unsqueeze(-1)
+        stem_input = x * channel_mask.unsqueeze(-1)
+        if self.conditioning_channels:
+            if conditioning is None:
+                conditioning = x.new_zeros((len(x), self.conditioning_channels))
+            if conditioning.shape != (len(x), self.conditioning_channels):
+                raise ValueError("Conditioning shape does not match the backbone contract")
+            expanded = conditioning.unsqueeze(-1).expand(-1, -1, x.shape[-1])
+            stem_input = torch.cat((stem_input, expanded), dim=1)
+        elif conditioning is not None:
+            raise ValueError("A discriminative backbone cannot receive diffusion conditioning")
+        hidden = self.stem(stem_input)
         if self.name == "conformer_lite":
             return self.sequence(hidden.transpose(1, 2)).transpose(1, 2)
         return self.sequence(hidden)
@@ -119,16 +136,25 @@ class CandidateModel(nn.Module):
         super().__init__()
         self.backbone = backbone
         self.formulation = formulation
-        self.classifier = nn.Linear(backbone.hidden, 2)
-        self.time_mlp = nn.Sequential(
-            nn.Linear(backbone.hidden, backbone.hidden),
-            nn.SiLU(),
-            nn.Linear(backbone.hidden, backbone.hidden),
+        self.classifier = (
+            None if formulation == "diffusion_energy" else nn.Linear(backbone.hidden, 2)
         )
-        self.class_embedding = nn.Embedding(2, backbone.hidden)
-        self.noise_head = nn.Conv1d(backbone.hidden, n_chans, 1)
+        if formulation == "discriminative":
+            self.time_mlp: nn.Module | None = None
+            self.class_embedding: nn.Embedding | None = None
+            self.noise_head: nn.Conv1d | None = None
+        else:
+            self.time_mlp = nn.Sequential(
+                nn.Linear(backbone.hidden, backbone.hidden),
+                nn.SiLU(),
+                nn.Linear(backbone.hidden, backbone.hidden),
+            )
+            self.class_embedding = nn.Embedding(2, backbone.hidden)
+            self.noise_head = nn.Conv1d(backbone.hidden, n_chans, 1)
 
     def classify(self, x: torch.Tensor, channel_mask: torch.Tensor) -> torch.Tensor:
+        if self.classifier is None:
+            raise RuntimeError("The diffusion-energy formulation has no classifier head")
         return self.classifier(self.backbone.encode(x, channel_mask).mean(dim=-1))
 
     def forward(
@@ -139,6 +165,8 @@ class CandidateModel(nn.Module):
         label: torch.Tensor,
         channel_mask: torch.Tensor,
     ) -> torch.Tensor:
+        if self.time_mlp is None or self.class_embedding is None or self.noise_head is None:
+            raise RuntimeError("The discriminative formulation has no diffusion head")
         conditioning = self.time_mlp(_time_embedding(timestep, self.backbone.hidden))
         conditioning = conditioning + self.class_embedding(label)
         hidden = self.backbone.encode(x, channel_mask, conditioning)
@@ -159,8 +187,14 @@ def make_candidate_model(candidate: CandidateSpec, *, n_chans: int) -> Candidate
         raise ValueError(f"Unknown formulation: {candidate.formulation}")
     if candidate.width not in {"compact", "wide"}:
         raise ValueError(f"Unknown width: {candidate.width}")
+    conditioning_channels = 0 if candidate.formulation == "discriminative" else candidate.hidden
     return CandidateModel(
-        EEGBackbone(candidate.backbone, n_chans=n_chans, hidden=candidate.hidden),
+        EEGBackbone(
+            candidate.backbone,
+            n_chans=n_chans,
+            hidden=candidate.hidden,
+            conditioning_channels=conditioning_channels,
+        ),
         candidate.formulation,
         n_chans,
     )

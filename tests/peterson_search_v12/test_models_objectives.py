@@ -23,8 +23,9 @@ def test_all_exp01_models_forward_backward_and_normalize(candidate):
     assert torch.isfinite(terms.total)
     terms.total.backward()
     assert all(
-        parameter.grad is None or torch.isfinite(parameter.grad).all()
+        parameter.grad is not None and torch.isfinite(parameter.grad).all()
         for parameter in model.parameters()
+        if parameter.requires_grad
     )
     probabilities = predict_probabilities(
         model, x, mask, candidate=candidate, seed=11, inference_k=2
@@ -111,3 +112,61 @@ def test_diffusion_conditioning_interacts_with_the_input_signal():
             second, timestep=timestep, label=label_one, channel_mask=mask
         ) - model(second, timestep=timestep, label=label_zero, channel_mask=mask)
     assert not torch.allclose(first_effect, second_effect, atol=1e-6, rtol=1e-5)
+
+
+def _stem_input_channels(model) -> int:
+    stem = model.backbone.stem
+    if isinstance(stem, torch.nn.Conv1d):
+        return stem.in_channels
+    if hasattr(stem, "branches"):
+        return stem.branches[0].in_channels
+    if hasattr(stem, "temporal"):
+        return stem.temporal[0][0].in_channels
+    return int(stem.coefficients.shape[1])
+
+
+@pytest.mark.parametrize("backbone", SearchConfig().backbones)
+def test_miccai_style_conditioning_enters_before_the_first_convolution(backbone):
+    candidates = build_exp01_catalog(SearchConfig())
+    discriminative = next(
+        item
+        for item in candidates
+        if item.backbone == backbone
+        and item.formulation == "discriminative"
+        and item.width == "compact"
+    )
+    diffusion = next(
+        item
+        for item in candidates
+        if item.backbone == backbone
+        and item.formulation == "diffusion_energy"
+        and item.width == "compact"
+    )
+    discriminative_model = make_candidate_model(discriminative, n_chans=3)
+    diffusion_model = make_candidate_model(diffusion, n_chans=3)
+    assert _stem_input_channels(discriminative_model) == 3
+    assert _stem_input_channels(diffusion_model) == 3 + diffusion.hidden
+    assert parameter_report(discriminative, n_chans=3)["total"] < parameter_report(
+        diffusion, n_chans=3
+    )["total"]
+
+
+def test_formulations_only_construct_the_heads_they_use():
+    candidates = build_exp01_catalog(SearchConfig())
+    discriminative = next(item for item in candidates if item.formulation == "discriminative")
+    diffusion = next(item for item in candidates if item.formulation == "diffusion_energy")
+    hybrid = next(item for item in candidates if item.formulation == "hybrid")
+    discriminative_model = make_candidate_model(discriminative, n_chans=3)
+    diffusion_model = make_candidate_model(diffusion, n_chans=3)
+    hybrid_model = make_candidate_model(hybrid, n_chans=3)
+    assert discriminative_model.time_mlp is None
+    assert discriminative_model.class_embedding is None
+    assert discriminative_model.noise_head is None
+    assert diffusion_model.classifier is None
+    assert diffusion_model.time_mlp is not None
+    assert diffusion_model.class_embedding is not None
+    assert diffusion_model.noise_head is not None
+    assert hybrid_model.classifier is not None
+    assert hybrid_model.time_mlp is not None
+    assert hybrid_model.class_embedding is not None
+    assert hybrid_model.noise_head is not None

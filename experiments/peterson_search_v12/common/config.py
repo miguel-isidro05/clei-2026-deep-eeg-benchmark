@@ -25,7 +25,7 @@ class SearchConfig:
     batch_size: int = 64
     learning_rate: float = 6.25e-4
     weight_decay: float = 1e-4
-    diffusion_steps: int = 100
+    diffusion_steps: int = 1000
     inference_k: int = 4
     rank_margin: float = 0.1
     lambda_denoise: float = 1.0
@@ -51,6 +51,8 @@ class SearchConfig:
             raise ValueError("V12 exp01 requires within_session with overlap windows")
         if self.folds != (0, 2) or self.seeds != (0,):
             raise ValueError("V12 exp01 folds and seed are frozen")
+        if self.diffusion_steps != 1000:
+            raise ValueError("V12 exp01 uses the frozen full-noise 1000-step DDPM schedule")
         if min(self.epochs, self.patience, self.batch_size) < 1:
             raise ValueError("Training budget values must be positive")
         self.validate_subjects(self.subjects)
