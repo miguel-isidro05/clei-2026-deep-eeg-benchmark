@@ -93,4 +93,3 @@ def test_g0_model_contains_no_inactive_auxiliary_parameters():
     assert report["active"] == report["total"]
     logits = model(torch.from_numpy(train[:4]), dropout_seed=3)
     assert logits.shape == (4, 2)
-

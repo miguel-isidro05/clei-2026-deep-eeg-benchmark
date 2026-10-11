@@ -177,4 +177,3 @@ def manifest_payload(manifest: Exp03Manifest) -> dict[str, object]:
         "cells": [asdict(cell) for cell in manifest.cells],
         "sha256": manifest.sha256,
     }
-

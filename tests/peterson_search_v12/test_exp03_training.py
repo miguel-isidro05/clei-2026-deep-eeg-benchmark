@@ -45,4 +45,3 @@ def test_last_and_best_checkpoints_come_from_one_trajectory():
     assert 1 <= outcome.best.epoch <= 3
     assert len(outcome.history) == 3
     assert outcome.last.state_dict.keys() == outcome.best.state_dict.keys()
-

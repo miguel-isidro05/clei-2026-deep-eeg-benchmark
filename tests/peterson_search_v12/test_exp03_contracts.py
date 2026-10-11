@@ -103,4 +103,3 @@ def test_exp03_recipe_cli_plan_only_is_data_free(tmp_path):
     )
     assert len(manifest["cells"]) == 186
     assert not (tmp_path / "recipe_cells").exists()
-

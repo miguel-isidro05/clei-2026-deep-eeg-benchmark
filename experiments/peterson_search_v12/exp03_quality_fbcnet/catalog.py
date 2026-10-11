@@ -134,4 +134,3 @@ def build_smoke_quality_catalog(config: Exp03Config) -> tuple[QualityCandidate, 
 
 def catalog_payload(items: tuple[RecipeSpec, ...] | tuple[QualityCandidate, ...]):
     return [asdict(item) for item in items]
-

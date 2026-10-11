@@ -1,8 +1,10 @@
 # Peterson V12 exp03: confirmación causal de FBCNet y adaptación a EEG low-cost
 
-Fecha: 2026-10-11  
-Rama: `exp/peterson-model-search-v12`  
-Base ejecutable: `291c3f9`  
+Fecha: 2026-10-11
+
+Rama: `exp/peterson-model-search-v12`
+
+Base ejecutable: `291c3f9`
 Entrada obligatoria: exp02 completo, 300/300 celdas, sin acceso al holdout
 
 ## 1. Decisión que motiva exp03

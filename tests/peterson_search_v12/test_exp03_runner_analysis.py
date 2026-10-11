@@ -72,4 +72,3 @@ def test_recipe_selection_applies_collapse_margin_and_tie_break_rules():
     ]
     selected = select_recipe(summaries, practical_tie=0.005)
     assert selected["recipe_id"] == "R1-best-wd0"
-

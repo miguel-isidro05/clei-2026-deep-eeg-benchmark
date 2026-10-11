@@ -56,13 +56,16 @@ class Exp03Config:
                 raise ValueError("Exp03 quality folds and seeds are frozen")
             if (self.recipe_epochs, self.replay_epochs, self.replay_patience) != (300, 150, 35):
                 raise ValueError("Exp03 training budgets are frozen")
-        if min(
-            self.recipe_epochs,
-            self.replay_epochs,
-            self.replay_patience,
-            self.batch_size,
-            self.quality_gate_hidden,
-        ) < 1:
+        if (
+            min(
+                self.recipe_epochs,
+                self.replay_epochs,
+                self.replay_patience,
+                self.batch_size,
+                self.quality_gate_hidden,
+            )
+            < 1
+        ):
             raise ValueError("Exp03 training values must be positive")
 
 
@@ -79,4 +82,3 @@ def smoke_config() -> Exp03Config:
         replay_patience=1,
         batch_size=8,
     )
-

@@ -210,4 +210,3 @@ def audit_results(output_dir: Path, manifest: Exp03Manifest) -> dict[str, Any]:
         "found": len(found),
         "code_sha256": next(iter(code_hashes)),
     }
-

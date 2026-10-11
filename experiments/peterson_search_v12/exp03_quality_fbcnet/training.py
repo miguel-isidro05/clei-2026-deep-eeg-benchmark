@@ -102,15 +102,9 @@ def train_checkpoint_trajectory(
     target = torch.device(device)
     model = model.to(target)
     criterion = nn.CrossEntropyLoss()
-    optimizer = torch.optim.AdamW(
-        model.parameters(), lr=learning_rate, weight_decay=weight_decay
-    )
-    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
-        optimizer, T_max=max(1, epochs - 1)
-    )
-    train_loader = _loader(
-        x_train, y_train, batch_size=batch_size, seed=seed, shuffle=True
-    )
+    optimizer = torch.optim.AdamW(model.parameters(), lr=learning_rate, weight_decay=weight_decay)
+    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=max(1, epochs - 1))
+    train_loader = _loader(x_train, y_train, batch_size=batch_size, seed=seed, shuffle=True)
     validation_loader = _loader(
         x_validation, y_validation, batch_size=batch_size, seed=seed, shuffle=False
     )
@@ -192,4 +186,3 @@ def train_checkpoint_trajectory(
         history=history,
         updates=updates,
     )
-

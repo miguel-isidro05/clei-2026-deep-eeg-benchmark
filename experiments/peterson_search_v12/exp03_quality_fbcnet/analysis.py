@@ -220,10 +220,7 @@ def analyze_quality_payloads(
                 "mean_stress_accuracy": {
                     key: float(
                         np.mean(
-                            [
-                                cell["stress_results"][key]["metrics"]["accuracy"]
-                                for cell in cells
-                            ]
+                            [cell["stress_results"][key]["metrics"]["accuracy"] for cell in cells]
                         )
                     )
                     for key in ("missing_1", "missing_2")
@@ -299,4 +296,3 @@ def analyze_quality_payloads(
         "ranking": ranking,
         "promotion_decision": decision,
     }
-

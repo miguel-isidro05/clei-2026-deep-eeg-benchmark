@@ -66,9 +66,7 @@ def _strict_data_audit(output_dir: Path, config: Exp03Config, phase: str) -> Non
     folds = config.recipe_folds if phase == "recipe" else config.quality_folds
     for subject in config.subjects:
         fragment = json.loads(
-            (output_dir / "manifests" / "data" / f"{subject}.json").read_text(
-                encoding="utf-8"
-            )
+            (output_dir / "manifests" / "data" / f"{subject}.json").read_text(encoding="utf-8")
         )
         fragments.append(fragment)
         raw_path = data_root / f"{subject}.mat"
@@ -133,4 +131,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

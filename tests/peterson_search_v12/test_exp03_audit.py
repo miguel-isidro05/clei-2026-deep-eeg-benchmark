@@ -141,4 +141,3 @@ def test_exp03_audit_binds_cell_config_and_split_hashes(tmp_path):
     path.write_text(json.dumps(altered_candidate), encoding="utf-8")
     with pytest.raises(ValueError, match="candidate hash"):
         audit_results(tmp_path, manifest)
-

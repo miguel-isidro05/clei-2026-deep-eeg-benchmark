@@ -30,9 +30,7 @@ def _raw_descriptors(
     log_diff_rms = np.log(np.sqrt(np.mean(differences**2, axis=-1)) + EPSILON)
     flatline = np.mean(np.abs(differences) <= diff_threshold[None, :, None], axis=-1)
     robust_distance = np.abs(values - channel_median[None, :, None])
-    extreme = np.mean(
-        robust_distance > (6.0 * channel_mad[None, :, None] + EPSILON), axis=-1
-    )
+    extreme = np.mean(robust_distance > (6.0 * channel_mad[None, :, None] + EPSILON), axis=-1)
     return np.stack((log_rms, log_diff_rms, flatline, extreme), axis=-1).astype(np.float32)
 
 
@@ -68,14 +66,14 @@ def fit_quality_profile(x_train: np.ndarray) -> QualityProfile:
     if values.ndim != 3 or min(values.shape) < 1:
         raise ValueError("Quality profile expects non-empty (windows, channels, time) data")
     channel_median = np.median(values, axis=(0, 2)).astype(np.float32)
-    channel_mad = np.median(
-        np.abs(values - channel_median[None, :, None]), axis=(0, 2)
-    ).astype(np.float32)
+    channel_mad = np.median(np.abs(values - channel_median[None, :, None]), axis=(0, 2)).astype(
+        np.float32
+    )
     differences = np.diff(values, axis=-1)
     diff_median = np.median(differences, axis=(0, 2))
-    diff_mad = np.median(
-        np.abs(differences - diff_median[None, :, None]), axis=(0, 2)
-    ).astype(np.float32)
+    diff_mad = np.median(np.abs(differences - diff_median[None, :, None]), axis=(0, 2)).astype(
+        np.float32
+    )
     diff_threshold = np.maximum(diff_mad * 0.01, EPSILON).astype(np.float32)
     descriptors = _raw_descriptors(
         values,
@@ -89,9 +87,7 @@ def fit_quality_profile(x_train: np.ndarray) -> QualityProfile:
         "channel_median": tuple(float(value) for value in channel_median),
         "channel_mad": tuple(float(value) for value in channel_mad),
         "diff_threshold": tuple(float(value) for value in diff_threshold),
-        "descriptor_mean": tuple(
-            tuple(float(value) for value in row) for row in descriptor_mean
-        ),
+        "descriptor_mean": tuple(tuple(float(value) for value in row) for row in descriptor_mean),
         "descriptor_std": tuple(tuple(float(value) for value in row) for row in descriptor_std),
         "fit_partition": "train_only",
         "n_train_windows": int(len(values)),
@@ -208,17 +204,18 @@ class QualityConditionedFBCNet(nn.Module):
     def _descriptors(self, x: torch.Tensor) -> torch.Tensor:
         differences = x.diff(dim=-1)
         log_rms = torch.log(torch.sqrt(torch.mean(x.square(), dim=-1)) + EPSILON)
-        log_diff_rms = torch.log(
-            torch.sqrt(torch.mean(differences.square(), dim=-1)) + EPSILON
-        )
+        log_diff_rms = torch.log(torch.sqrt(torch.mean(differences.square(), dim=-1)) + EPSILON)
         flatline = (
-            differences.abs() <= self.quality_diff_threshold[None, :, None]
-        ).to(x.dtype).mean(dim=-1)
+            (differences.abs() <= self.quality_diff_threshold[None, :, None])
+            .to(x.dtype)
+            .mean(dim=-1)
+        )
         robust_distance = (x - self.quality_channel_median[None, :, None]).abs()
         extreme = (
-            robust_distance
-            > (6.0 * self.quality_channel_mad[None, :, None] + EPSILON)
-        ).to(x.dtype).mean(dim=-1)
+            (robust_distance > (6.0 * self.quality_channel_mad[None, :, None] + EPSILON))
+            .to(x.dtype)
+            .mean(dim=-1)
+        )
         descriptors = torch.stack((log_rms, log_diff_rms, flatline, extreme), dim=-1)
         standardized = (
             descriptors - self.quality_descriptor_mean[None]
@@ -242,4 +239,3 @@ class QualityConditionedFBCNet(nn.Module):
         total = sum(parameter.numel() for parameter in self.parameters())
         auxiliary = 0 if self.gate is None else sum(p.numel() for p in self.gate.parameters())
         return {"total": int(total), "active": int(total), "auxiliary": int(auxiliary)}
-

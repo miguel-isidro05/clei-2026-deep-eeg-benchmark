@@ -88,9 +88,7 @@ def deterministic_stress_masks(
 
 def _clean_preprocessing_report(report: dict[str, Any]) -> dict[str, Any]:
     cleaned = dict(report)
-    cleaned["post_preprocessing_validation_sha256"] = cleaned.pop(
-        "post_preprocessing_test_sha256"
-    )
+    cleaned["post_preprocessing_validation_sha256"] = cleaned.pop("post_preprocessing_test_sha256")
     cleaned["n_validation_trials"] = cleaned.pop("n_test_trials")
     return cleaned
 
@@ -176,9 +174,7 @@ def _is_resumable(path: Path, fingerprint: dict[str, Any]) -> bool:
         return False
 
 
-def _checkpoint_for_policy(
-    outcome: Any, checkpoint_policy: str
-) -> CheckpointState:
+def _checkpoint_for_policy(outcome: Any, checkpoint_policy: str) -> CheckpointState:
     if checkpoint_policy == "last_epoch":
         return outcome.last
     if checkpoint_policy == "best_val_ce":
@@ -487,9 +483,7 @@ def _baseline_result(
             fold_pred, fold_score, windows_per_trial = aggregate_window_scores(
                 window_scores, trial_indices, n_trials=len(validation_indices)
             )
-            count = parameter_count(
-                "FBCNet", x_train.shape[1], x_train.shape[-1], recording.sfreq
-            )
+            count = parameter_count("FBCNet", x_train.shape[1], x_train.shape[-1], recording.sfreq)
             parameters = {"total": count, "active": count, "auxiliary": 0}
             history = [
                 {"epoch": index + 1, "train_loss": float(row["train_loss"])}
@@ -889,9 +883,7 @@ def run_quality_phase(
     )
     candidate_by_id = {candidate.config_id: candidate for candidate in candidates}
     selected = tuple(
-        cell
-        for index, cell in enumerate(manifest.cells)
-        if index % num_shards == shard_index
+        cell for index, cell in enumerate(manifest.cells) if index % num_shards == shard_index
     )
     recording_cache: dict[str, Any] = {}
     split_cache: dict[str, Any] = {}
@@ -959,4 +951,3 @@ def run_quality_phase(
             print(f"failed {cell.cell_id}: {type(error).__name__}: {error}", flush=True)
     _ = environment
     return {"planned": len(selected), "completed": completed, "failed": failed}
-

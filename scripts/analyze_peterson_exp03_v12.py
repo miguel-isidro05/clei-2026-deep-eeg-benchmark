@@ -180,9 +180,7 @@ def main() -> None:
     recipe_decision = json.loads(
         (args.output_dir / "decisions" / "recipe_decision.json").read_text(encoding="utf-8")
     )
-    quality_audit = json.loads(
-        (args.output_dir / "quality_audit.json").read_text(encoding="utf-8")
-    )
+    quality_audit = json.loads((args.output_dir / "quality_audit.json").read_text(encoding="utf-8"))
     write_json_atomic(
         args.output_dir / "run_complete.json",
         {
@@ -201,4 +199,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-
