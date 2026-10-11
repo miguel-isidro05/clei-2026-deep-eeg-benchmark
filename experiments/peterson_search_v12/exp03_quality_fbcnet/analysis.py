@@ -228,6 +228,15 @@ def analyze_quality_payloads(
                     )
                     for key in ("missing_1", "missing_2")
                 },
+                "mean_inference_seconds_per_trial": float(
+                    np.mean(
+                        [
+                            report["clean_inference_seconds_per_trial"]
+                            for cell in cells
+                            for report in cell["fold_reports"]
+                        ]
+                    )
+                ),
                 "parameters": cells[0]["parameters"] if cells else {},
             }
         )
@@ -260,6 +269,7 @@ def analyze_quality_payloads(
             item["mean_accuracy"],
             item["lower_quartile"],
             item["mean_kappa"],
+            -item["mean_inference_seconds_per_trial"],
         ),
         reverse=True,
     )

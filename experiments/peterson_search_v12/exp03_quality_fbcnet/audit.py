@@ -66,6 +66,16 @@ def _validate_metrics(payload: dict[str, Any]) -> None:
         raise ValueError("Validation metrics do not match stored predictions")
 
 
+def _validate_signed_payload(value: Any, *, label: str) -> str:
+    if not isinstance(value, dict) or "sha256" not in value:
+        raise ValueError(f"Cell is missing signed {label} metadata")
+    body = dict(value)
+    stored = str(body.pop("sha256"))
+    if stored != canonical_sha256(body):
+        raise ValueError(f"Cell {label} hash does not match its payload")
+    return stored
+
+
 def validate_result_cell(payload: dict[str, Any]) -> None:
     leaked = FORBIDDEN_KEYS & set(_walk_keys(payload))
     if leaked:
@@ -144,6 +154,15 @@ def validate_result_cell(payload: dict[str, Any]) -> None:
     ):
         if len(str(fingerprint.get(key, ""))) != 64:
             raise ValueError(f"Fingerprint {key} is invalid")
+    if payload["kind"] == "quality":
+        candidate_hash = _validate_signed_payload(payload.get("candidate"), label="candidate")
+        _validate_signed_payload(payload.get("selected_recipe"), label="selected recipe")
+        if fingerprint.get("cell_config_sha256") != candidate_hash:
+            raise ValueError("Cell candidate hash does not match fingerprint cell config")
+    elif payload["kind"] == "recipe":
+        recipe_hash = _validate_signed_payload(payload.get("recipe"), label="recipe")
+        if fingerprint.get("cell_config_sha256") != recipe_hash:
+            raise ValueError("Cell recipe hash does not match its fingerprint")
     if fingerprint.get("git_dirty") is not False:
         raise ValueError("Full result cell was produced from a dirty Git tree")
 

@@ -217,6 +217,33 @@ def _predict_model(
     return np.concatenate(scores), gate_values
 
 
+def _synchronize_device(device: str) -> None:
+    if device.startswith("cuda") and torch.cuda.is_available():
+        torch.cuda.synchronize(torch.device(device))
+    elif device == "mps" and torch.backends.mps.is_available():
+        torch.mps.synchronize()
+
+
+def _profile_clean_inference(
+    model: torch.nn.Module,
+    x: np.ndarray,
+    *,
+    device: str,
+    batch_size: int,
+    n_trials: int,
+) -> tuple[np.ndarray, np.ndarray | None, float]:
+    if n_trials < 1:
+        raise ValueError("Inference profiling requires at least one trial")
+    warmup = x[: min(len(x), batch_size)]
+    _predict_model(model, warmup, device=device, batch_size=batch_size)
+    _synchronize_device(device)
+    started = time.perf_counter()
+    scores, gates = _predict_model(model, x, device=device, batch_size=batch_size)
+    _synchronize_device(device)
+    seconds_per_trial = (time.perf_counter() - started) / n_trials
+    return scores, gates, float(seconds_per_trial)
+
+
 def _base_payload(
     *,
     phase: str,
@@ -593,11 +620,12 @@ def _quality_result(
         checkpoint = _checkpoint_for_policy(outcome, selected_recipe.checkpoint_policy)
         outcome.model.load_state_dict(checkpoint.state_dict)
         parameters = outcome.model.parameter_report()
-        window_scores, gate_values = _predict_model(
+        window_scores, gate_values, inference_seconds_per_trial = _profile_clean_inference(
             outcome.model,
             x_validation,
             device=device,
             batch_size=config.batch_size,
+            n_trials=len(validation_indices),
         )
         fold_pred, fold_score, windows_per_trial = aggregate_window_scores(
             window_scores, trial_indices, n_trials=len(validation_indices)
@@ -650,6 +678,7 @@ def _quality_result(
                 "n_train_windows": len(x_train),
                 "n_validation_windows": len(x_validation),
                 "windows_per_validation_trial": windows_per_trial,
+                "clean_inference_seconds_per_trial": inference_seconds_per_trial,
                 "selected_epoch": checkpoint.epoch,
                 "best_epoch": outcome.best.epoch,
                 "last_epoch": outcome.last.epoch,
