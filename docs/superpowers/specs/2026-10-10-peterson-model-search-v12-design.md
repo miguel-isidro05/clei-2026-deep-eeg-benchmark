@@ -154,6 +154,11 @@ de 25% de sus celdas o quede dominada por completo.
 
 ### exp02: topología temporal y espacial
 
+> **Sustituido el 2026-10-11:** el resultado completo de exp01 permitió reducir y hacer factorial
+> esta etapa. La especificación ejecutable vigente es
+> `2026-10-11-peterson-model-search-v12-exp02-design.md`. Los conteos y perfiles descritos debajo se
+> conservan solo como historial del plan inicial y no deben implementarse.
+
 Cada una de las 12 configuraciones promovidas generará ocho perfiles estructurales. Los perfiles
 cubrirán:
 
