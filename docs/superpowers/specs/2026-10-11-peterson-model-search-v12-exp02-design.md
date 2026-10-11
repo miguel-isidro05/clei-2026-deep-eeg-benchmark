@@ -86,7 +86,7 @@ No se utilizará augmentación estocástica en exp02. El solapamiento de ventana
 pero channel dropout y temporal masking se reservarán para la siguiente etapa. Esto evita confundir
 el efecto de la arquitectura y el objetivo auxiliar con el de una segunda regularización.
 
-## 4. Factor A: seis topologías Inception
+## 4. Factor A: seis topologías Inception y dos rutas FBCNet
 
 Todas las topologías conservarán dos bloques residuales con dilataciones 1 y 2, normalización,
 activación GELU y dropout congelados. Solo cambiará el factor declarado.
@@ -99,10 +99,18 @@ activación GELU y dropout congelados. Solo cambiará el factor declarado.
 | T3 | 16 | 9,17,33,65 | depthwise temporal + pointwise | media |
 | T4 | 16 | 9,17,33,65 | convolución estándar | media + desviación estándar |
 | T5 | 16 | 9,17,33,65 | convolución estándar | atención temporal de una cabeza |
+| T6 | 96 | bandas FBCNet 8-30 Hz | FBCNet, 16 filtros espaciales por banda | log-varianza |
+| T7 | 192 | bandas FBCNet 8-30 Hz | FBCNet, 32 filtros espaciales por banda | log-varianza |
 
 El pooling por atención usará una proyección escalar `1x1`, softmax temporal y suma ponderada. El
 pooling estadístico concatenará media y desviación estándar con corrección desactivada para que sea
 estable en ventanas cortas. Cada celda registrará parámetros totales y parámetros activos.
+
+T6 y T7 reutilizarán la capa de filter-bank, la convolución espacial y el pooling de log-varianza
+de FBCNet. El objetivo auxiliar se conectará a la representación temporal previa al pooling. T7/O0
+actuará como control arquitectónico del FBCNet exacto dentro del mismo entrenador; el baseline
+externo seguirá usando la implementación y receta congeladas de V10. Esto permite distinguir un
+beneficio de FBCNet, del denoising y de su interacción.
 
 ## 5. Factor B: seis objetivos de entrenamiento
 
@@ -145,13 +153,13 @@ fusionada y los identificadores de trial. Ninguna variante se entrenará de nuev
 
 ## 7. Tamaño exacto
 
-- 6 topologías x 6 objetivos = 36 configuraciones entrenadas;
-- 36 configuraciones x 6 participantes = 216 celdas candidatas;
-- 216 celdas x 3 folds = 648 entrenamientos de candidatos;
-- 30 checkpoints auxiliares x 13 inferencias + 6 controles O0 = 396 configuraciones efectivas;
+- 8 topologías x 6 objetivos = 48 configuraciones entrenadas;
+- 48 configuraciones x 6 participantes = 288 celdas candidatas;
+- 288 celdas x 3 folds = 864 entrenamientos de candidatos;
+- 40 checkpoints auxiliares x 13 inferencias + 8 controles O0 = 528 configuraciones efectivas;
 - 2 baselines x 6 participantes = 12 celdas baseline;
-- total del manifiesto principal: 228 celdas;
-- total de filas de evaluación candidatas: 396 x 6 = 2,376.
+- total del manifiesto principal: 300 celdas;
+- total de filas de evaluación candidatas: 528 x 6 = 3,168.
 
 Las celdas baseline también incluirán tres folds. CSP+LDA y FBCNet usarán los mismos índices de
 trial que cada candidato. FBCNet reutilizará la receta congelada V10, no un reentrenamiento con
@@ -191,9 +199,9 @@ latencia p95 y menor número de parámetros, en ese orden.
 
 El runner escribirá antes de entrenar:
 
-- `experiment_manifest.json` con las 228 celdas esperadas;
-- `catalog.json` con las 36 configuraciones completas;
-- `inference_catalog.json` con las 396 recetas efectivas;
+- `experiment_manifest.json` con las 300 celdas esperadas;
+- `catalog.json` con las 48 configuraciones completas;
+- `inference_catalog.json` con las 528 recetas efectivas;
 - `data_manifest.json` con SHA-256 de cada MAT y hashes de datos estandarizados;
 - `split_manifest.json` con índices y hashes de folds;
 - `environment.json` y estado Git limpio.
@@ -211,14 +219,14 @@ inconclusa. No mezclará celdas de exp01 ni de commits anteriores.
 
 ## 10. Paralelización y artefactos
 
-Las 228 celdas se dividirán determinísticamente en dos shards balanceados por costo estimado. Cada
+Las 300 celdas se dividirán determinísticamente en dos shards balanceados por costo estimado. Cada
 GPU ejecutará un shard. La asignación formará parte del manifiesto, y la identidad científica de una
 celda no dependerá del dispositivo.
 
 La ejecución producirá:
 
 - checkpoints y celdas firmadas;
-- tabla larga de las 2,376 evaluaciones;
+- tabla larga de las 3,168 evaluaciones;
 - comparaciones emparejadas contra CSP+LDA y FBCNet;
 - ablation readout de topología, objetivo, checkpoint e inferencia;
 - fronteras accuracy-latencia y accuracy-parámetros;
