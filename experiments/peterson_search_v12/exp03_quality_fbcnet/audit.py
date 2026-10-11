@@ -11,6 +11,7 @@ import numpy as np
 
 from deepbench.metrics import compute_metrics
 from experiments.peterson_search_v12.common.audit import validation_quality_flags
+from experiments.peterson_search_v12.common.identity import canonical_sha256
 from experiments.peterson_search_v12.common.partitions import DISCOVERY_SUBJECTS, HOLDOUT_SUBJECTS
 
 from .manifest import Exp03Manifest
@@ -127,6 +128,11 @@ def validate_result_cell(payload: dict[str, Any]) -> None:
     if payload["quality_flags"] != sorted(expected_flags):
         raise ValueError("Cell quality flags do not match fold flags")
     fingerprint = payload["fingerprint"]
+    expected_split_hash = canonical_sha256(
+        [str(report["search_split_sha256"]) for report in reports]
+    )
+    if fingerprint.get("split_sha256") != expected_split_hash:
+        raise ValueError("Fingerprint split hash does not match fold reports")
     for key in (
         "config_sha256",
         "catalog_sha256",
@@ -173,6 +179,8 @@ def audit_results(output_dir: Path, manifest: Exp03Manifest) -> dict[str, Any]:
         }
         if any(fingerprint.get(key) != value for key, value in required.items()):
             raise ValueError(f"Run fingerprint mismatch in {cell_id}")
+        if fingerprint.get("cell_config_sha256") != expected_cell.config_sha256:
+            raise ValueError(f"Run fingerprint cell config mismatch in {cell_id}")
         code_hashes.add(str(fingerprint["code_sha256"]))
     if len(code_hashes) != 1:
         raise ValueError("Results mix multiple exp03 code identities")
