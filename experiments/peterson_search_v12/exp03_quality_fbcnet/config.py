@@ -65,3 +65,18 @@ class Exp03Config:
         ) < 1:
             raise ValueError("Exp03 training values must be positive")
 
+
+def smoke_config() -> Exp03Config:
+    return Exp03Config(
+        profile="smoke",
+        subjects=("S09", "S03"),
+        recipe_folds=(0,),
+        recipe_seeds=(0,),
+        quality_folds=(0,),
+        quality_seeds=(0,),
+        recipe_epochs=1,
+        replay_epochs=1,
+        replay_patience=1,
+        batch_size=8,
+    )
+

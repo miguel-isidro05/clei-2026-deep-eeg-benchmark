@@ -40,10 +40,27 @@ def exp02_code_sha256(root: Path) -> str:
     return digest.hexdigest()
 
 
+def exp03_code_sha256(root: Path) -> str:
+    """Hash only the executable exp03 surface and shared benchmark dependencies."""
+    paths = list((root / "experiments" / "peterson_search_v12" / "common").rglob("*.py"))
+    paths += list(
+        (root / "experiments" / "peterson_search_v12" / "exp03_quality_fbcnet").rglob("*.py")
+    )
+    paths += list((root / "scripts").glob("*peterson_exp03_v12*.py"))
+    paths += list((root / "src" / "deepbench").glob("*.py"))
+    paths += [root / "run_peterson_exp03_cayetano.sh"]
+    digest = hashlib.sha256()
+    for path in sorted(path for path in paths if path.is_file()):
+        digest.update(str(path.relative_to(root)).encode("utf-8"))
+        digest.update(path.read_bytes())
+    return digest.hexdigest()
+
+
 __all__ = [
     "canonical_json",
     "canonical_sha256",
     "code_sha256",
     "exp02_code_sha256",
+    "exp03_code_sha256",
     "git_identity",
 ]

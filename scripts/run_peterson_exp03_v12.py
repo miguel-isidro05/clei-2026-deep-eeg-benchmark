@@ -18,19 +18,25 @@ from experiments.peterson_search_v12.common.io import write_json_atomic  # noqa:
 from experiments.peterson_search_v12.exp03_quality_fbcnet.catalog import (  # noqa: E402
     build_quality_catalog,
     build_recipe_catalog,
+    build_smoke_quality_catalog,
     catalog_payload,
 )
 from experiments.peterson_search_v12.exp03_quality_fbcnet.config import (  # noqa: E402
     Exp03Config,
+    smoke_config,
 )
 from experiments.peterson_search_v12.exp03_quality_fbcnet.manifest import (  # noqa: E402
     build_quality_manifest,
     build_recipe_manifest,
     manifest_payload,
 )
+from experiments.peterson_search_v12.exp03_quality_fbcnet.runner import (  # noqa: E402
+    run_quality_phase,
+    run_recipe_phase,
+)
 
 
-def _decision_sha256(output_dir: Path) -> str:
+def _decision(output_dir: Path) -> dict[str, object]:
     path = output_dir / "decisions" / "recipe_decision.json"
     if not path.is_file():
         raise SystemExit("Quality phase requires decisions/recipe_decision.json")
@@ -38,7 +44,7 @@ def _decision_sha256(output_dir: Path) -> str:
     value = str(payload.get("sha256", ""))
     if len(value) != 64:
         raise SystemExit("Recipe decision is missing a valid SHA-256")
-    return value
+    return payload
 
 
 def main() -> None:
@@ -51,7 +57,7 @@ def main() -> None:
     parser.add_argument("--shard-index", type=int, default=0)
     parser.add_argument("--smoke", action="store_true")
     args = parser.parse_args()
-    config = Exp03Config()
+    config = smoke_config() if args.smoke else Exp03Config()
     revision = str(git_identity(ROOT)["revision"] or "unknown")
     if args.phase == "recipe":
         catalog = build_recipe_catalog(config)
@@ -64,12 +70,15 @@ def main() -> None:
         )
         print(f"planned_recipes={len(catalog)}")
     else:
-        catalog = build_quality_catalog(config)
+        decision = _decision(args.output_dir)
+        catalog = (
+            build_smoke_quality_catalog(config) if args.smoke else build_quality_catalog(config)
+        )
         manifest = build_quality_manifest(
             config,
             catalog,
             revision=revision,
-            recipe_decision_sha256=_decision_sha256(args.output_dir),
+            recipe_decision_sha256=str(decision["sha256"]),
         )
         write_json_atomic(
             args.output_dir / "manifests" / "quality-catalog.json", catalog_payload(catalog)
@@ -81,7 +90,42 @@ def main() -> None:
     print(f"planned_cells={len(manifest.cells)}")
     if args.plan_only:
         return
-    raise SystemExit("Execution runner is not implemented yet")
+    if args.phase == "recipe":
+        summary = run_recipe_phase(
+            args.output_dir,
+            config,
+            catalog,
+            manifest,
+            device=args.device,
+            num_shards=args.num_shards,
+            shard_index=args.shard_index,
+        )
+    else:
+        selected = decision.get("selected_recipe")
+        if not isinstance(selected, dict):
+            raise SystemExit("Recipe decision is missing selected_recipe")
+        recipes = build_recipe_catalog(config)
+        selected_recipe = next(
+            (recipe for recipe in recipes if recipe.recipe_id == selected.get("recipe_id")), None
+        )
+        if selected_recipe is None or selected_recipe.sha256 != selected.get("sha256"):
+            raise SystemExit("Selected recipe does not match the signed exp03 catalog")
+        summary = run_quality_phase(
+            args.output_dir,
+            config,
+            catalog,
+            manifest,
+            selected_recipe,
+            device=args.device,
+            num_shards=args.num_shards,
+            shard_index=args.shard_index,
+        )
+    print(
+        f"exp03_{args.phase}_shard_complete={summary['completed']}/{summary['planned']} "
+        f"failed={summary['failed']}"
+    )
+    if summary["failed"]:
+        raise SystemExit(1)
 
 
 if __name__ == "__main__":

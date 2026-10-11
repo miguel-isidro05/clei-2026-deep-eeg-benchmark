@@ -123,6 +123,31 @@ class ChannelDropout(nn.Module):
         return x * mask.unsqueeze(-1), mask
 
 
+class ExactFBCNet(nn.Module):
+    """Official FBCNet with a training interface shared by exp03 candidates."""
+
+    def __init__(self, *, n_chans: int, n_times: int, sfreq: float) -> None:
+        super().__init__()
+        self.base = FBCNet(
+            n_chans=n_chans,
+            n_outputs=2,
+            n_times=n_times,
+            sfreq=sfreq,
+            n_bands=list(FBC_BANDS),
+            n_filters_spat=32,
+            temporal_layer="LogVarLayer",
+            stride_factor=4,
+        )
+
+    def forward(self, x: torch.Tensor, *, dropout_seed: int | None = None) -> torch.Tensor:
+        _ = dropout_seed
+        return self.base(x)
+
+    def parameter_report(self) -> dict[str, int]:
+        total = sum(parameter.numel() for parameter in self.parameters())
+        return {"total": int(total), "active": int(total), "auxiliary": 0}
+
+
 class QualityConditionedFBCNet(nn.Module):
     """FBCNet whose optional channel gate starts as an exact identity."""
 

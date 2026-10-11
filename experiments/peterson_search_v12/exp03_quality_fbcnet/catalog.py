@@ -114,6 +114,24 @@ def build_quality_catalog(config: Exp03Config) -> tuple[QualityCandidate, ...]:
     return tuple(candidates)
 
 
+def build_smoke_quality_catalog(config: Exp03Config) -> tuple[QualityCandidate, ...]:
+    catalog = build_quality_catalog(config)
+    requested = {
+        ("G0", 0.0, 32, 4),
+        ("G1", 0.1, 32, 4),
+        ("G2", 0.2, 16, 2),
+    }
+    selected = tuple(
+        item
+        for item in catalog
+        if (item.gate_id, item.channel_dropout, item.n_filters_spat, item.stride_factor)
+        in requested
+    )
+    if len(selected) != len(requested):
+        raise RuntimeError("Exp03 smoke catalog drifted")
+    return selected
+
+
 def catalog_payload(items: tuple[RecipeSpec, ...] | tuple[QualityCandidate, ...]):
     return [asdict(item) for item in items]
 
