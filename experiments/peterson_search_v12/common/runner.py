@@ -21,7 +21,7 @@ from deepbench.preprocessing import (
     preprocess_split,
 )
 
-from .audit import validate_cell_payload
+from .audit import validate_cell_payload, validation_quality_flags
 from .catalogs import CandidateSpec, build_exp01_catalog, catalog_payload
 from .config import SearchConfig
 from .identity import canonical_sha256, code_sha256, git_identity
@@ -148,6 +148,7 @@ def _run_cell(
     predictions: list[int] = []
     scores: list[float] = []
     fold_reports: list[dict[str, Any]] = []
+    cell_quality_flags: set[str] = set()
     peak_memory = 0
     for split_index, split in enumerate(splits):
         train_indices = np.asarray(split.train_indices, dtype=np.int64)
@@ -200,6 +201,10 @@ def _run_cell(
             window_probabilities, trial_indices, n_trials=len(validation_indices)
         )
         fold_y = recording.y[validation_indices]
+        fold_quality_flags = validation_quality_flags(
+            [int(value) for value in fold_y], [int(value) for value in fold_pred]
+        )
+        cell_quality_flags.update(fold_quality_flags)
         labels.extend(int(value) for value in fold_y)
         predictions.extend(int(value) for value in fold_pred)
         scores.extend(float(value) for value in fold_score)
@@ -224,6 +229,7 @@ def _run_cell(
                 "updates": outcome.updates,
                 "history": outcome.history,
                 "validation_metrics": compute_metrics(fold_y, fold_pred, fold_score),
+                "quality_flags": fold_quality_flags,
                 "preprocessing": _clean_preprocessing_report(prepared.report),
             }
         )
@@ -247,6 +253,7 @@ def _run_cell(
         "validation_metrics": compute_metrics(
             np.asarray(labels), np.asarray(predictions), np.asarray(scores)
         ),
+        "quality_flags": sorted(cell_quality_flags),
         "validation_y_true": labels,
         "validation_y_pred": predictions,
         "validation_y_score": scores,

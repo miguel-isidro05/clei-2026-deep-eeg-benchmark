@@ -59,6 +59,16 @@ def test_training_restores_checkpoint_and_is_reproducible(tmp_path):
     )
     assert np.array_equal(first_logits, second_logits)
     assert first.history == second.history
+    assert {
+        "train_classification_loss",
+        "train_denoising_loss",
+        "train_ranking_loss",
+        "train_consistency_loss",
+        "validation_classification_loss",
+        "validation_denoising_loss",
+        "validation_ranking_loss",
+        "validation_consistency_loss",
+    } <= set(first.history[0])
 
 
 def test_plan_only_writes_36_candidates_and_216_cells(tmp_path):
@@ -79,8 +89,22 @@ def test_cell_schema_rejects_outer_test_material():
         "subject": "S09",
         "seed": 0,
         "folds": [0, 2],
-        "validation_metrics": {"accuracy": 0.6, "kappa": 0.2},
-        "fold_reports": [],
+        "validation_metrics": {
+            "accuracy": 1.0,
+            "kappa": 1.0,
+            "precision_macro": 1.0,
+            "recall_macro": 1.0,
+            "f1_macro": 1.0,
+            "roc_auc": 1.0,
+        },
+        "quality_flags": [],
+        "validation_y_true": [0, 1, 0, 1],
+        "validation_y_pred": [0, 1, 0, 1],
+        "validation_y_score": [0.1, 0.9, 0.2, 0.8],
+        "fold_reports": [
+            {"n_validation_trials": 2, "quality_flags": []},
+            {"n_validation_trials": 2, "quality_flags": []},
+        ],
         "fingerprint": {"candidate_sha256": "a" * 64, "code_sha256": "b" * 64},
     }
     validate_cell_payload(payload)
@@ -99,7 +123,7 @@ def test_audit_requires_exact_manifest(tmp_path):
         audit_results(tmp_path, manifest)
 
 
-def test_cell_schema_rejects_collapsed_or_inconsistent_validation():
+def test_cell_schema_records_collapsed_validation_without_aborting_the_search():
     payload = {
         "schema_version": 1,
         "status": "completed",
@@ -109,16 +133,29 @@ def test_cell_schema_rejects_collapsed_or_inconsistent_validation():
         "subject": "S09",
         "seed": 0,
         "folds": [0, 2],
-        "validation_metrics": {"accuracy": 0.5, "kappa": 0.0},
-        "validation_y_true": [0, 1],
-        "validation_y_pred": [0, 0],
-        "validation_y_score": [0.5, 0.5],
-        "fold_reports": [],
+        "validation_metrics": {
+            "accuracy": 0.5,
+            "kappa": 0.0,
+            "precision_macro": 0.25,
+            "recall_macro": 0.5,
+            "f1_macro": 1 / 3,
+            "roc_auc": 0.5,
+        },
+        "quality_flags": [],
+        "validation_y_true": [0, 1, 0, 1],
+        "validation_y_pred": [0, 0, 0, 0],
+        "validation_y_score": [0.5, 0.5, 0.5, 0.5],
+        "fold_reports": [
+            {"n_validation_trials": 2, "quality_flags": ["validation_class_collapse"]},
+            {"n_validation_trials": 2, "quality_flags": ["validation_class_collapse"]},
+        ],
         "fingerprint": {"candidate_sha256": "a" * 64, "code_sha256": "b" * 64},
     }
-    with pytest.raises(ValueError, match="collapse"):
+    with pytest.raises(ValueError, match="quality flag"):
         validate_cell_payload(payload)
-    payload["validation_y_pred"] = [0, 1]
+    payload["quality_flags"] = ["validation_class_collapse"]
+    validate_cell_payload(payload)
+    payload["validation_y_pred"] = [0, 1, 0, 1]
     payload["validation_y_score"] = [0.2]
     with pytest.raises(ValueError, match="length"):
         validate_cell_payload(payload)
@@ -134,11 +171,22 @@ def test_resumption_requires_the_entire_fingerprint():
         "subject": "S09",
         "seed": 0,
         "folds": [0, 2],
-        "validation_metrics": {"accuracy": 0.6, "kappa": 0.2},
-        "validation_y_true": [0, 1],
-        "validation_y_pred": [0, 1],
-        "validation_y_score": [0.2, 0.8],
-        "fold_reports": [],
+        "validation_metrics": {
+            "accuracy": 1.0,
+            "kappa": 1.0,
+            "precision_macro": 1.0,
+            "recall_macro": 1.0,
+            "f1_macro": 1.0,
+            "roc_auc": 1.0,
+        },
+        "quality_flags": [],
+        "validation_y_true": [0, 1, 0, 1],
+        "validation_y_pred": [0, 1, 0, 1],
+        "validation_y_score": [0.2, 0.8, 0.1, 0.9],
+        "fold_reports": [
+            {"n_validation_trials": 2, "quality_flags": []},
+            {"n_validation_trials": 2, "quality_flags": []},
+        ],
         "fingerprint": {
             "candidate_sha256": "a" * 64,
             "config_sha256": "b" * 64,
@@ -158,6 +206,66 @@ def test_resumption_requires_the_entire_fingerprint():
         changed = dict(payload["fingerprint"])
         changed[key] = "changed"
         assert not is_resumable_cell(payload, changed)
+
+
+def test_completed_cell_cannot_omit_prediction_evidence():
+    payload = {
+        "schema_version": 1,
+        "status": "completed",
+        "experiment": "exp01",
+        "cell_id": "exp01-cfg-001__seed0__S09",
+        "config_id": "exp01-cfg-001",
+        "subject": "S09",
+        "seed": 0,
+        "folds": [0, 2],
+        "validation_metrics": {
+            "accuracy": 1.0,
+            "kappa": 1.0,
+            "precision_macro": 1.0,
+            "recall_macro": 1.0,
+            "f1_macro": 1.0,
+            "roc_auc": 1.0,
+        },
+        "quality_flags": [],
+        "fold_reports": [],
+        "fingerprint": {"candidate_sha256": "a" * 64, "code_sha256": "b" * 64},
+    }
+    with pytest.raises(ValueError, match="missing keys"):
+        validate_cell_payload(payload)
+
+
+def test_opposite_fold_collapses_are_not_hidden_by_aggregation():
+    payload = {
+        "schema_version": 1,
+        "status": "completed",
+        "experiment": "exp01",
+        "cell_id": "exp01-cfg-001__seed0__S09",
+        "config_id": "exp01-cfg-001",
+        "subject": "S09",
+        "seed": 0,
+        "folds": [0, 2],
+        "validation_metrics": {
+            "accuracy": 0.5,
+            "kappa": 0.0,
+            "precision_macro": 0.5,
+            "recall_macro": 0.5,
+            "f1_macro": 0.5,
+            "roc_auc": 0.5,
+        },
+        "quality_flags": ["validation_class_collapse"],
+        "validation_y_true": [0, 1, 0, 1],
+        "validation_y_pred": [0, 0, 1, 1],
+        "validation_y_score": [0.4, 0.4, 0.6, 0.6],
+        "fold_reports": [
+            {"n_validation_trials": 2, "quality_flags": ["validation_class_collapse"]},
+            {"n_validation_trials": 2, "quality_flags": ["validation_class_collapse"]},
+        ],
+        "fingerprint": {"candidate_sha256": "a" * 64, "code_sha256": "b" * 64},
+    }
+    validate_cell_payload(payload)
+    payload["quality_flags"] = []
+    with pytest.raises(ValueError, match="folds"):
+        validate_cell_payload(payload)
 
 
 def test_verifiable_fingerprints_reject_candidate_split_environment_and_device_tampering():

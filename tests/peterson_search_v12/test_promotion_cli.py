@@ -28,6 +28,7 @@ def _payloads():
                     },
                     "subject": subject,
                     "validation_metrics": {"accuracy": accuracy, "kappa": accuracy - 0.5},
+                    "quality_flags": [],
                     "parameters": {"total": 1000 + rank},
                     "runtime": {
                         "elapsed_seconds": 10.0 + rank,
@@ -61,6 +62,17 @@ def test_promotion_rejects_duplicate_subjects():
         rank_and_promote(payloads, expected_cells=216)
 
 
+def test_promotion_records_but_excludes_collapsed_candidates():
+    payloads = _payloads()
+    collapsed_id = payloads[0]["config_id"]
+    payloads[0]["quality_flags"] = ["validation_class_collapse"]
+    decision = rank_and_promote(payloads, expected_cells=216)
+    collapsed = next(item for item in decision["ranking"] if item["config_id"] == collapsed_id)
+    assert collapsed["collapse_cells"] == 1
+    assert collapsed["eligible_for_promotion"] is False
+    assert collapsed_id not in {item["config_id"] for item in decision["promoted"]}
+
+
 def test_cli_plan_only_does_not_load_data(tmp_path):
     result = subprocess.run(
         [
@@ -79,7 +91,7 @@ def test_cli_plan_only_does_not_load_data(tmp_path):
     assert not (tmp_path / "cells").exists()
 
 
-def test_cli_smoke_plan_has_exact_two_cell_manifest(tmp_path):
+def test_cli_smoke_plan_covers_all_formulations_and_a_specialized_backbone(tmp_path):
     subprocess.run(
         [
             "python",
@@ -96,8 +108,21 @@ def test_cli_smoke_plan_has_exact_two_cell_manifest(tmp_path):
         text=True,
     )
     manifest = json.loads((tmp_path / "manifests" / "smoke-exp01.json").read_text(encoding="utf-8"))
-    assert len(manifest["cells"]) == 2
-    assert len({cell["cell_id"] for cell in manifest["cells"]}) == 2
+    assert len(manifest["cells"]) == 4
+    assert len({cell["cell_id"] for cell in manifest["cells"]}) == 4
+    catalog = {
+        item["config_id"]: item
+        for item in json.loads(
+            (tmp_path / "manifests" / "catalog-exp01.json").read_text(encoding="utf-8")
+        )
+    }
+    selected = [catalog[cell["config_id"]] for cell in manifest["cells"]]
+    assert {item["formulation"] for item in selected} == {
+        "discriminative",
+        "diffusion_energy",
+        "hybrid",
+    }
+    assert "conformer_lite" in {item["backbone"] for item in selected}
     assert not (tmp_path / "manifests" / "exp01.json").exists()
 
 

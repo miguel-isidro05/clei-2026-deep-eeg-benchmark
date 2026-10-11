@@ -91,8 +91,15 @@ class EEGBackbone(nn.Module):
         self.name = name
         self.hidden = hidden
 
-    def encode(self, x: torch.Tensor, channel_mask: torch.Tensor) -> torch.Tensor:
+    def encode(
+        self,
+        x: torch.Tensor,
+        channel_mask: torch.Tensor,
+        conditioning: torch.Tensor | None = None,
+    ) -> torch.Tensor:
         hidden = self.stem(x * channel_mask.unsqueeze(-1))
+        if conditioning is not None:
+            hidden = hidden + conditioning.unsqueeze(-1)
         if self.name == "conformer_lite":
             return self.sequence(hidden.transpose(1, 2)).transpose(1, 2)
         return self.sequence(hidden)
@@ -132,10 +139,10 @@ class CandidateModel(nn.Module):
         label: torch.Tensor,
         channel_mask: torch.Tensor,
     ) -> torch.Tensor:
-        hidden = self.backbone.encode(x, channel_mask)
         conditioning = self.time_mlp(_time_embedding(timestep, self.backbone.hidden))
         conditioning = conditioning + self.class_embedding(label)
-        return self.noise_head(hidden + conditioning.unsqueeze(-1))
+        hidden = self.backbone.encode(x, channel_mask, conditioning)
+        return self.noise_head(hidden)
 
 
 def make_candidate_model(candidate: CandidateSpec, *, n_chans: int) -> CandidateModel:

@@ -29,6 +29,9 @@ def rank_and_promote(payloads: list[dict[str, Any]], *, expected_cells: int) -> 
             [item["validation_metrics"]["accuracy"] for item in items], dtype=float
         )
         candidate = items[0]["candidate"]
+        collapse_cells = sum(
+            "validation_class_collapse" in item.get("quality_flags", []) for item in items
+        )
         ranking.append(
             {
                 "config_id": config_id,
@@ -41,6 +44,9 @@ def rank_and_promote(payloads: list[dict[str, Any]], *, expected_cells: int) -> 
                 "mean_kappa": float(
                     np.mean([item["validation_metrics"]["kappa"] for item in items])
                 ),
+                "collapse_cells": collapse_cells,
+                "collapse_rate": collapse_cells / len(items),
+                "eligible_for_promotion": collapse_cells == 0,
                 "parameters": int(items[0]["parameters"]["total"]),
                 "mean_inference_seconds_per_trial": float(
                     np.mean([item["runtime"]["inference_seconds_per_trial"] for item in items])
@@ -49,6 +55,7 @@ def rank_and_promote(payloads: list[dict[str, Any]], *, expected_cells: int) -> 
         )
     ranking.sort(
         key=lambda item: (
+            not item["eligible_for_promotion"],
             -item["mean_accuracy"],
             -item["lower_quartile_accuracy"],
             item["parameters"],
@@ -59,6 +66,8 @@ def rank_and_promote(payloads: list[dict[str, Any]], *, expected_cells: int) -> 
     promoted: list[dict[str, Any]] = []
     backbone_counts: Counter[str] = Counter()
     for item in ranking:
+        if not item["eligible_for_promotion"]:
+            continue
         if backbone_counts[item["backbone"]] >= 3:
             continue
         promoted.append(item)
@@ -75,6 +84,7 @@ def rank_and_promote(payloads: list[dict[str, Any]], *, expected_cells: int) -> 
                 (
                     item
                     for item in ranking
+                    if item["eligible_for_promotion"]
                     if item["formulation"] not in formulations
                     and item not in promoted
                     and adjusted_counts[item["backbone"]] < 3

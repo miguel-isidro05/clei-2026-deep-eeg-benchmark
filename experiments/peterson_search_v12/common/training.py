@@ -16,7 +16,7 @@ from .catalogs import CandidateSpec
 from .config import SearchConfig
 from .io import write_torch_atomic
 from .models import CandidateModel, make_candidate_model
-from .objectives import candidate_loss, predict_probabilities
+from .objectives import LossTerms, candidate_loss, predict_probabilities
 
 
 @dataclass
@@ -41,6 +41,14 @@ def _loader(
     )
 
 
+_LOSS_NAMES = ("total", "classification", "denoising", "ranking", "consistency")
+
+
+def _loss_values(terms: LossTerms) -> dict[str, float]:
+    values = torch.stack([getattr(terms, name) for name in _LOSS_NAMES]).detach().cpu().tolist()
+    return dict(zip(_LOSS_NAMES, (float(value) for value in values), strict=True))
+
+
 def _mean_loss(
     model: CandidateModel,
     loader: DataLoader,
@@ -48,9 +56,9 @@ def _mean_loss(
     config: SearchConfig,
     target: torch.device,
     seed: int,
-) -> float:
+) -> dict[str, float]:
     model.eval()
-    losses: list[float] = []
+    losses: dict[str, list[float]] = {name: [] for name in _LOSS_NAMES}
     with torch.no_grad():
         for batch_index, (x_batch, y_batch) in enumerate(loader):
             x_batch, y_batch = x_batch.to(target), y_batch.to(target)
@@ -68,8 +76,9 @@ def _mean_loss(
                 lambda_rank=config.lambda_rank,
                 lambda_consistency=config.lambda_consistency,
             )
-            losses.append(float(terms.total.cpu()))
-    return float(np.mean(losses))
+            for name, value in _loss_values(terms).items():
+                losses[name].append(value)
+    return {name: float(np.mean(values)) for name, values in losses.items()}
 
 
 def train_candidate(
@@ -105,7 +114,7 @@ def train_candidate(
     updates = 0
     for epoch in range(config.epochs):
         model.train()
-        batch_losses: list[float] = []
+        batch_losses: dict[str, list[float]] = {name: [] for name in _LOSS_NAMES}
         for batch_index, (x_batch, y_batch) in enumerate(train_loader):
             x_batch, y_batch = x_batch.to(target), y_batch.to(target)
             mask = torch.ones((len(x_batch), x_batch.shape[1]), device=target)
@@ -134,19 +143,23 @@ def train_candidate(
                 raise RuntimeError("Training produced a non-finite gradient")
             optimizer.step()
             updates += 1
-            batch_losses.append(float(terms.total.detach().cpu()))
-        validation_loss = _mean_loss(
+            for name, value in _loss_values(terms).items():
+                batch_losses[name].append(value)
+        validation_losses = _mean_loss(
             model, validation_loader, candidate, config, target, seed + epoch * 10_000
         )
-        history.append(
-            {
-                "epoch": epoch + 1,
-                "train_loss": float(np.mean(batch_losses)),
-                "validation_loss": validation_loss,
-                "learning_rate": float(optimizer.param_groups[0]["lr"]),
-                "updates": updates,
-            }
-        )
+        epoch_report: dict[str, float | int] = {
+            "epoch": epoch + 1,
+            "train_loss": float(np.mean(batch_losses["total"])),
+            "validation_loss": validation_losses["total"],
+            "learning_rate": float(optimizer.param_groups[0]["lr"]),
+            "updates": updates,
+        }
+        for name in _LOSS_NAMES[1:]:
+            epoch_report[f"train_{name}_loss"] = float(np.mean(batch_losses[name]))
+            epoch_report[f"validation_{name}_loss"] = validation_losses[name]
+        history.append(epoch_report)
+        validation_loss = validation_losses["total"]
         if validation_loss < best_loss - 1e-8:
             best_loss = validation_loss
             best_epoch = epoch + 1

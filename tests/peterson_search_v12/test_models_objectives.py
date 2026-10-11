@@ -85,3 +85,29 @@ def test_hybrid_zero_weights_remove_terms_exactly():
         lambda_consistency=0.0,
     )
     assert torch.equal(terms.total, terms.classification)
+
+
+def test_diffusion_conditioning_interacts_with_the_input_signal():
+    candidate = next(
+        item
+        for item in build_exp01_catalog(SearchConfig())
+        if item.backbone == "residual"
+        and item.formulation == "diffusion_energy"
+        and item.width == "compact"
+    )
+    torch.manual_seed(23)
+    model = make_candidate_model(candidate, n_chans=3).eval()
+    first = torch.randn(2, 3, 64)
+    second = torch.randn(2, 3, 64)
+    timestep = torch.tensor([10, 60])
+    mask = torch.ones(2, 3)
+    label_zero = torch.zeros(2, dtype=torch.long)
+    label_one = torch.ones(2, dtype=torch.long)
+    with torch.no_grad():
+        first_effect = model(
+            first, timestep=timestep, label=label_one, channel_mask=mask
+        ) - model(first, timestep=timestep, label=label_zero, channel_mask=mask)
+        second_effect = model(
+            second, timestep=timestep, label=label_one, channel_mask=mask
+        ) - model(second, timestep=timestep, label=label_zero, channel_mask=mask)
+    assert not torch.allclose(first_effect, second_effect, atol=1e-6, rtol=1e-5)

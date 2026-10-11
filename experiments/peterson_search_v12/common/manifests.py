@@ -81,10 +81,16 @@ def build_smoke_manifest(
     num_shards: int = 2,
 ) -> SearchManifest:
     full = build_manifest(config, catalog, revision=revision)
-    cells = tuple(
-        shard_cells(full.cells, num_shards=num_shards, shard_index=index)[0]
-        for index in range(num_shards)
+    if num_shards != 2:
+        raise ValueError("The V12 smoke profile is defined for exactly two shards")
+    requested = (
+        ("exp01-cfg-001", "S09"),
+        ("exp01-cfg-003", "S03"),
+        ("exp01-cfg-005", "S02"),
+        ("exp01-cfg-036", "S08"),
     )
+    by_identity = {(cell.config_id, cell.subject): cell for cell in full.cells}
+    cells = tuple(by_identity[identity] for identity in requested)
     base = {
         "experiment": config.experiment,
         "profile": "smoke",

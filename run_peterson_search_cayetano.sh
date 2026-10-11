@@ -55,7 +55,7 @@ output="$PETERSON_SEARCH_RESULTS_DIR"
 smoke_args=()
 if [[ "${PETERSON_SEARCH_SMOKE:-0}" == "1" ]]; then
   output="${PETERSON_SEARCH_RESULTS_DIR%/}_smoke"
-  smoke_args=(--smoke --epochs-override 1 --max-cells-per-shard 1)
+  smoke_args=(--smoke --epochs-override 1 --max-cells-per-shard 2)
 fi
 mkdir -p "$output/logs"
 
