@@ -22,6 +22,25 @@ def _cell() -> dict[str, object]:
     y_true = np.asarray([0, 1, 0, 1])
     y_pred = np.asarray([0, 1, 1, 1])
     y_score = np.asarray([0.1, 0.8, 0.7, 0.9])
+    candidate_body = {
+        "config_id": "exp03-qcfg-001",
+        "gate_id": "G0",
+        "descriptor_names": [],
+        "channel_dropout": 0.0,
+        "n_filters_spat": 16,
+        "stride_factor": 2,
+    }
+    candidate = {**candidate_body, "sha256": canonical_sha256(candidate_body)}
+    recipe_body = {
+        "recipe_id": "R0-last-wd0",
+        "trajectory_id": "trajectory-wd0",
+        "checkpoint_policy": "last_epoch",
+        "weight_decay": 0.0,
+        "epochs": 300,
+        "patience": None,
+        "learning_rate": 6.25e-4,
+        "batch_size": 64,
+    }
     return {
         "schema_version": 3,
         "status": "completed",
@@ -39,6 +58,8 @@ def _cell() -> dict[str, object]:
         "validation_y_pred": y_pred.tolist(),
         "validation_y_score": y_score.tolist(),
         "quality_flags": [],
+        "candidate": candidate,
+        "selected_recipe": {**recipe_body, "sha256": canonical_sha256(recipe_body)},
         "fold_reports": [
             {
                 "fold": 0,
@@ -51,7 +72,7 @@ def _cell() -> dict[str, object]:
             "config_sha256": "b" * 64,
             "catalog_sha256": "c" * 64,
             "manifest_sha256": "d" * 64,
-            "cell_config_sha256": "3" * 64,
+            "cell_config_sha256": candidate["sha256"],
             "code_sha256": "e" * 64,
             "data_sha256": "f" * 64,
             "split_sha256": canonical_sha256(["a" * 64]),
@@ -82,7 +103,7 @@ def test_exp03_audit_binds_cell_config_and_split_hashes(tmp_path):
         kind="quality",
         model_id="QualityFBCNet",
         config_id="exp03-qcfg-001",
-        config_sha256="3" * 64,
+        config_sha256=str(payload["candidate"]["sha256"]),
         subject="S09",
         seed=0,
         folds=(0,),
@@ -113,5 +134,11 @@ def test_exp03_audit_binds_cell_config_and_split_hashes(tmp_path):
     altered_split["fingerprint"]["split_sha256"] = "6" * 64
     path.write_text(json.dumps(altered_split), encoding="utf-8")
     with pytest.raises(ValueError, match="split hash"):
+        audit_results(tmp_path, manifest)
+
+    altered_candidate = copy.deepcopy(payload)
+    altered_candidate["candidate"]["channel_dropout"] = 0.2
+    path.write_text(json.dumps(altered_candidate), encoding="utf-8")
+    with pytest.raises(ValueError, match="candidate hash"):
         audit_results(tmp_path, manifest)
 
