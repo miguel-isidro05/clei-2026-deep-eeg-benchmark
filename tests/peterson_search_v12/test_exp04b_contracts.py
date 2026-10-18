@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import replace
+from dataclasses import asdict, replace
 
 import pytest
 import torch
@@ -8,6 +8,7 @@ import torch
 from experiments.peterson_search_v12.exp04b_safepath.catalog import (
     build_w1_catalog,
     build_w2_catalog,
+    build_w3_catalog,
 )
 from experiments.peterson_search_v12.exp04b_safepath.config import (
     Exp04bConfig,
@@ -26,6 +27,7 @@ from experiments.peterson_search_v12.exp04b_safepath.objectives import tail_risk
 from experiments.peterson_search_v12.exp04b_safepath.statistics import (
     physical_mask_floor,
 )
+from experiments.peterson_search_v12.common.identity import canonical_sha256
 
 
 def test_exp04b_scope_and_budget_are_frozen_before_holdout() -> None:
@@ -58,6 +60,15 @@ def test_catalogs_cover_the_predeclared_mechanisms_without_duplicates() -> None:
         "probability_mixture",
     }
     assert {candidate.objective for candidate in w2} == {"cvar25", "group_dro"}
+
+
+def test_every_catalog_entry_is_signed_after_promotion() -> None:
+    w2 = build_w2_catalog()
+    selected = tuple(candidate.config_id for candidate in w2[:3])
+    for candidate in build_w1_catalog() + w2 + build_w3_catalog(selected):
+        payload = asdict(candidate)
+        signature = str(payload.pop("sha256"))
+        assert signature == canonical_sha256(payload)
 
 
 def test_manifest_has_474_jobs_and_subject_stable_two_gpu_shards() -> None:
@@ -153,3 +164,7 @@ def test_smoke_contract_is_small_but_keeps_two_subject_shards() -> None:
     assert config.subjects == ("S09", "S03")
     assert config.folds == (0,)
     assert config.seeds == (0,)
+    selected = tuple(candidate.config_id for candidate in build_w2_catalog()[:3])
+    manifest = build_search_manifest(config, selected_w2=selected, revision="abc123")
+    assert sum(cell.wave == "w2" for cell in manifest.cells) == 6
+    assert len({cell.config_id for cell in manifest.cells if cell.wave == "w2"}) == 3
