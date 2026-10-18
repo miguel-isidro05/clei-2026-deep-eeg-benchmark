@@ -5,6 +5,9 @@ from dataclasses import asdict, replace
 import pytest
 import torch
 
+from experiments.peterson_search_v12.exp04b_safepath.analysis import (
+    build_final_decision,
+)
 from experiments.peterson_search_v12.common.identity import canonical_sha256
 from experiments.peterson_search_v12.exp04b_safepath.catalog import (
     build_w1_catalog,
@@ -104,9 +107,7 @@ class _SeedAwareExpert(_ToyExpert):
         super().__init__(bias)
         self.last_dropout_seed: int | None = None
 
-    def forward(
-        self, x: torch.Tensor, *, dropout_seed: int | None = None
-    ) -> torch.Tensor:
+    def forward(self, x: torch.Tensor, *, dropout_seed: int | None = None) -> torch.Tensor:
         self.last_dropout_seed = dropout_seed
         return super().forward(x)
 
@@ -200,6 +201,40 @@ def test_worst_physical_mask_is_aggregated_across_folds_before_minimum() -> None
     result = physical_mask_floor(records)
     assert result["worst_mask_id"] == "T6"
     assert result["worst_mask_accuracy"] == pytest.approx(0.50)
+
+
+def test_final_promotion_requires_both_missing_channel_endpoints() -> None:
+    subjects = tuple(f"S{index:02d}" for index in range(6))
+
+    def metrics(missing_1: float, missing_2: float) -> dict[str, dict[str, float]]:
+        return {
+            subject: {
+                "accuracy": 0.70,
+                "kappa": 0.40,
+                "missing_1_floor": missing_1,
+                "missing_2_floor": missing_2,
+            }
+            for subject in subjects
+        }
+
+    baseline = {
+        "config_id": "exp04b-w3-fbc-control",
+        "role": "clean_control",
+        "collapse_count": 0,
+        "subject_metrics": metrics(0.40, 0.20),
+    }
+    candidate = {
+        "config_id": "exp04b-w2-i01",
+        "role": "promoted",
+        "collapse_count": 0,
+        "subject_metrics": metrics(0.30, 0.25),
+    }
+    decision = build_final_decision({"wave": "w3", "ranking": [candidate, baseline]})
+    assert decision["status"] == "no_promotion"
+    test = decision["tests"][0]
+    assert test["missing_1_mean_delta"] == pytest.approx(-0.10)
+    assert test["missing_2_mean_delta"] == pytest.approx(0.05)
+    assert test["passes_predeclared_margins"] is False
 
 
 def test_smoke_contract_is_small_but_keeps_two_subject_shards() -> None:
