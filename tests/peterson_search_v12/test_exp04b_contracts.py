@@ -5,10 +5,10 @@ from dataclasses import asdict, replace
 import pytest
 import torch
 
+from experiments.peterson_search_v12.common.identity import canonical_sha256
 from experiments.peterson_search_v12.exp04b_safepath.analysis import (
     build_final_decision,
 )
-from experiments.peterson_search_v12.common.identity import canonical_sha256
 from experiments.peterson_search_v12.exp04b_safepath.catalog import (
     build_w1_catalog,
     build_w2_catalog,
