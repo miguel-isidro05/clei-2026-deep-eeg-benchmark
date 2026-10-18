@@ -5,6 +5,7 @@ from dataclasses import asdict, replace
 import pytest
 import torch
 
+from experiments.peterson_search_v12.common.identity import canonical_sha256
 from experiments.peterson_search_v12.exp04b_safepath.catalog import (
     build_w1_catalog,
     build_w2_catalog,
@@ -17,6 +18,7 @@ from experiments.peterson_search_v12.exp04b_safepath.config import (
 from experiments.peterson_search_v12.exp04b_safepath.corruptions import (
     apply_corruption,
     build_stress_suite,
+    training_corruption,
 )
 from experiments.peterson_search_v12.exp04b_safepath.manifest import (
     build_search_manifest,
@@ -27,7 +29,6 @@ from experiments.peterson_search_v12.exp04b_safepath.objectives import tail_risk
 from experiments.peterson_search_v12.exp04b_safepath.statistics import (
     physical_mask_floor,
 )
-from experiments.peterson_search_v12.common.identity import canonical_sha256
 
 
 def test_exp04b_scope_and_budget_are_frozen_before_holdout() -> None:
@@ -133,6 +134,21 @@ def test_stress_suite_is_exhaustive_for_missing_channels_and_deterministic() -> 
     second, second_mask = apply_corruption(x, missing_one[0], seed=5)
     assert torch.equal(first, second)
     assert torch.equal(first_mask, second_mask)
+
+
+def test_broad_training_corruptions_have_finite_normalized_severity() -> None:
+    x = torch.randn(4, 15, 64)
+    for seed in range(128):
+        corrupted, mask, severity = training_corruption(
+            x,
+            family="broad_mixed",
+            max_missing=2,
+            seed=seed,
+        )
+        assert corrupted.shape == x.shape
+        assert mask.shape == x.shape[:2]
+        assert torch.isfinite(severity).all()
+        assert torch.all((severity >= 0) & (severity <= 1))
 
 
 def test_tail_objectives_emphasize_bad_groups() -> None:
