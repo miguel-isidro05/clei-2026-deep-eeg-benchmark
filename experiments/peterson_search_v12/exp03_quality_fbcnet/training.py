@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import copy
 import hashlib
+from collections.abc import Callable
 from dataclasses import dataclass
 
 import numpy as np
@@ -82,7 +83,7 @@ def _validation_loss(
 
 
 def train_checkpoint_trajectory(
-    model: nn.Module,
+    model_factory: Callable[[], nn.Module],
     x_train: np.ndarray,
     y_train: np.ndarray,
     x_validation: np.ndarray,
@@ -100,7 +101,7 @@ def train_checkpoint_trajectory(
         raise ValueError("Epochs and batch size must be positive")
     set_seeds(seed)
     target = torch.device(device)
-    model = model.to(target)
+    model = model_factory().to(target)
     criterion = nn.CrossEntropyLoss()
     optimizer = torch.optim.AdamW(model.parameters(), lr=learning_rate, weight_decay=weight_decay)
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=max(1, epochs - 1))

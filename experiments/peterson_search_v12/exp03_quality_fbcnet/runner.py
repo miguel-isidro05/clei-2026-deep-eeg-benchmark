@@ -8,6 +8,7 @@ import os
 import time
 import traceback
 from dataclasses import asdict
+from functools import partial
 from pathlib import Path
 from typing import Any
 
@@ -144,7 +145,6 @@ def _fingerprint(
     data_hash: str,
     split_hash: str,
     environment_hash: str,
-    device: str,
     dirty: bool,
 ) -> dict[str, Any]:
     return {
@@ -157,7 +157,6 @@ def _fingerprint(
         "data_sha256": data_hash,
         "split_sha256": split_hash,
         "environment_sha256": environment_hash,
-        "device": device,
         "revision": manifest.revision,
         "git_dirty": dirty,
     }
@@ -182,6 +181,10 @@ def _checkpoint_for_policy(outcome: Any, checkpoint_policy: str) -> CheckpointSt
     raise ValueError(f"Unknown checkpoint policy: {checkpoint_policy}")
 
 
+def _training_seed(seed: int, split_index: int) -> int:
+    return seed * 1_000 + split_index
+
+
 def _predict_model(
     model: torch.nn.Module,
     x: np.ndarray,
@@ -203,9 +206,8 @@ def _predict_model(
                 mask = torch.tensor(channel_mask, dtype=x_batch.dtype, device=target)
                 x_batch = x_batch * mask[None, :, None]
             if isinstance(model, QualityConditionedFBCNet):
-                _, weights = model.apply_quality_gate(x_batch)
+                logits, weights = model.forward_with_gate(x_batch, dropout_seed=None)
                 gates.append(weights.cpu().numpy())
-                logits = model(x_batch, dropout_seed=None)
             else:
                 logits = model(x_batch, dropout_seed=None)
             scores.append(torch.softmax(logits, dim=1)[:, 1].cpu().numpy())
@@ -317,26 +319,26 @@ def _recipe_unit_results(
         )
         x_validation, trial_indices = prepare_test_windows(prepared.x_test, config.condition)
         window_y = recording.y[validation_indices][trial_indices]
-        model = ExactFBCNet(
-            n_chans=x_train.shape[1],
-            n_times=x_train.shape[-1],
-            sfreq=recording.sfreq,
-        )
         outcome = train_checkpoint_trajectory(
-            model,
+            partial(
+                ExactFBCNet,
+                n_chans=x_train.shape[1],
+                n_times=x_train.shape[-1],
+                sfreq=recording.sfreq,
+            ),
             x_train,
             y_train,
             x_validation,
             window_y,
             device=device,
-            seed=unit[0].seed * 10_000 + split_index,
+            seed=_training_seed(unit[0].seed, split_index),
             epochs=trajectory.epochs,
             batch_size=trajectory.batch_size,
             learning_rate=trajectory.learning_rate,
             weight_decay=trajectory.weight_decay,
             patience=trajectory.patience,
         )
-        parameters = model.parameter_report()
+        parameters = outcome.model.parameter_report()
         write_torch_atomic(
             output_dir
             / "checkpoints"
@@ -474,7 +476,7 @@ def _baseline_result(
                 n_times=x_train.shape[-1],
                 sfreq=recording.sfreq,
                 device=device,
-                seed=cell.seed * 1000 + split_index,
+                seed=_training_seed(cell.seed, split_index),
                 epochs=config.recipe_epochs,
             )
             classifier.fit(x_train, y_train)
@@ -589,22 +591,22 @@ def _quality_result(
         x_validation, trial_indices = prepare_test_windows(prepared.x_test, config.condition)
         window_y = recording.y[validation_indices][trial_indices]
         profile = fit_quality_profile(x_train)
-        model = QualityConditionedFBCNet(
-            candidate,
-            profile=profile,
-            n_chans=x_train.shape[1],
-            n_times=x_train.shape[-1],
-            sfreq=recording.sfreq,
-            gate_hidden=config.quality_gate_hidden,
-        )
         outcome = train_checkpoint_trajectory(
-            model,
+            partial(
+                QualityConditionedFBCNet,
+                candidate,
+                profile=profile,
+                n_chans=x_train.shape[1],
+                n_times=x_train.shape[-1],
+                sfreq=recording.sfreq,
+                gate_hidden=config.quality_gate_hidden,
+            ),
             x_train,
             y_train,
             x_validation,
             window_y,
             device=device,
-            seed=cell.seed * 10_000 + split_index,
+            seed=_training_seed(cell.seed, split_index),
             epochs=selected_recipe.epochs,
             batch_size=selected_recipe.batch_size,
             learning_rate=selected_recipe.learning_rate,
@@ -753,7 +755,10 @@ def _run_context(
         raise RuntimeError("Current Git revision differs from the signed exp03 manifest")
     code_hash = exp03_code_sha256(root)
     environment = runtime_environment(device)
-    environment_hash = canonical_sha256(environment)
+    scientific_environment = {
+        key: environment[key] for key in ("python", "platform", "packages")
+    }
+    environment_hash = canonical_sha256(scientific_environment)
     label = device.replace(":", "_")
     write_json_atomic(
         output_dir / "manifests" / f"environment-{manifest.phase}-{label}.json", environment
@@ -804,7 +809,6 @@ def run_recipe_phase(
                 data_hash=recording.data_sha256,
                 split_hash=split_hash,
                 environment_hash=environment_hash,
-                device=device,
                 dirty=bool(git["dirty"]),
             )
             for item in unit
@@ -907,7 +911,6 @@ def run_quality_phase(
             data_hash=recording.data_sha256,
             split_hash=canonical_sha256([split.sha256 for split in splits]),
             environment_hash=environment_hash,
-            device=device,
             dirty=bool(git["dirty"]),
         )
         path = output_dir / "quality_cells" / f"{cell.cell_id}.json"

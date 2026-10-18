@@ -13,7 +13,10 @@ for import_root in (ROOT / "src", ROOT):
     if str(import_root) not in sys.path:
         sys.path.insert(0, str(import_root))
 
-from experiments.peterson_search_v12.common.identity import git_identity  # noqa: E402
+from experiments.peterson_search_v12.common.identity import (  # noqa: E402
+    canonical_sha256,
+    git_identity,
+)
 from experiments.peterson_search_v12.common.io import write_json_atomic  # noqa: E402
 from experiments.peterson_search_v12.exp03_quality_fbcnet.catalog import (  # noqa: E402
     build_quality_catalog,
@@ -42,8 +45,11 @@ def _decision(output_dir: Path) -> dict[str, object]:
         raise SystemExit("Quality phase requires decisions/recipe_decision.json")
     payload = json.loads(path.read_text(encoding="utf-8"))
     value = str(payload.get("sha256", ""))
-    if len(value) != 64:
-        raise SystemExit("Recipe decision is missing a valid SHA-256")
+    body = {key: item for key, item in payload.items() if key != "sha256"}
+    if len(value) != 64 or canonical_sha256(body) != value:
+        raise SystemExit("Recipe decision signature is invalid")
+    if payload.get("status") != "selected":
+        raise SystemExit("Recipe decision did not pass the parity gate")
     return payload
 
 

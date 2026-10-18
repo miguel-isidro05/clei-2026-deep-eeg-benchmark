@@ -9,6 +9,7 @@ from experiments.peterson_search_v12.exp03_quality_fbcnet.catalog import (
 from experiments.peterson_search_v12.exp03_quality_fbcnet.config import Exp03Config
 from experiments.peterson_search_v12.exp03_quality_fbcnet.models import (
     ChannelDropout,
+    ExactFBCNet,
     QualityConditionedFBCNet,
     fit_quality_profile,
 )
@@ -93,3 +94,31 @@ def test_g0_model_contains_no_inactive_auxiliary_parameters():
     assert report["active"] == report["total"]
     logits = model(torch.from_numpy(train[:4]), dropout_seed=3)
     assert logits.shape == (4, 2)
+
+
+def test_exact_fbcnet_reports_only_trainable_parameters_as_active():
+    report = ExactFBCNet(n_chans=15, n_times=375, sfreq=125.0).parameter_report()
+    assert report == {"total": 4994, "active": 4994, "auxiliary": 0, "frozen": 662}
+
+
+def test_channel_dropout_is_applied_before_quality_gate():
+    rng = np.random.default_rng(17)
+    train = rng.normal(size=(8, 3, 128)).astype(np.float32)
+    model = QualityConditionedFBCNet(
+        _candidate("G1", dropout=0.2),
+        profile=fit_quality_profile(train),
+        n_chans=3,
+        n_times=128,
+        sfreq=128.0,
+    ).train()
+    observed_gate_inputs: list[torch.Tensor] = []
+    original_gate = model.apply_quality_gate
+
+    def capture_gate_input(x: torch.Tensor):
+        observed_gate_inputs.append(x.detach().clone())
+        return original_gate(x)
+
+    model.apply_quality_gate = capture_gate_input
+    _ = model(torch.ones(64, 3, 128), dropout_seed=19)
+    missing_channels = torch.all(observed_gate_inputs[0] == 0, dim=-1)
+    assert torch.any(missing_channels)

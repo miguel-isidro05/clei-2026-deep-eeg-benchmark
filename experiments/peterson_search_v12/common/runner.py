@@ -99,7 +99,15 @@ def _clean_preprocessing_report(report: dict[str, Any]) -> dict[str, Any]:
 
 def runtime_environment(device: str) -> dict[str, Any]:
     packages: dict[str, str | None] = {}
-    for package in ("torch", "numpy", "scipy", "scikit-learn", "mne"):
+    for package in (
+        "torch",
+        "numpy",
+        "scipy",
+        "scikit-learn",
+        "mne",
+        "braindecode",
+        "skorch",
+    ):
         try:
             packages[package] = importlib.metadata.version(package)
         except importlib.metadata.PackageNotFoundError:
@@ -107,6 +115,9 @@ def runtime_environment(device: str) -> dict[str, Any]:
     gpu_name = None
     if device.startswith("cuda") and torch.cuda.is_available():
         gpu_name = torch.cuda.get_device_name(torch.device(device))
+    packages["torch_cuda"] = str(torch.version.cuda) if torch.version.cuda is not None else None
+    cudnn_version = torch.backends.cudnn.version()
+    packages["cudnn"] = str(cudnn_version) if cudnn_version is not None else None
     return {
         "python": platform.python_version(),
         "platform": platform.platform(),

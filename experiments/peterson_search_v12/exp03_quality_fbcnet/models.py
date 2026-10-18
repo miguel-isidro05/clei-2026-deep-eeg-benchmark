@@ -140,8 +140,18 @@ class ExactFBCNet(nn.Module):
         return self.base(x)
 
     def parameter_report(self) -> dict[str, int]:
-        total = sum(parameter.numel() for parameter in self.parameters())
-        return {"total": int(total), "active": int(total), "auxiliary": 0}
+        trainable = sum(
+            parameter.numel() for parameter in self.parameters() if parameter.requires_grad
+        )
+        frozen = sum(
+            parameter.numel() for parameter in self.parameters() if not parameter.requires_grad
+        )
+        return {
+            "total": int(trainable),
+            "active": int(trainable),
+            "auxiliary": 0,
+            "frozen": int(frozen),
+        }
 
 
 class QualityConditionedFBCNet(nn.Module):
@@ -230,12 +240,36 @@ class QualityConditionedFBCNet(nn.Module):
         weights = raw / raw.mean(dim=1, keepdim=True)
         return x * weights.unsqueeze(-1), weights
 
+    def forward_with_gate(
+        self, x: torch.Tensor, *, dropout_seed: int | None = None
+    ) -> tuple[torch.Tensor, torch.Tensor]:
+        dropped, _ = self.channel_dropout(x, seed=dropout_seed)
+        gated, weights = self.apply_quality_gate(dropped)
+        return self.base(gated), weights
+
     def forward(self, x: torch.Tensor, *, dropout_seed: int | None = None) -> torch.Tensor:
-        gated, _ = self.apply_quality_gate(x)
-        dropped, _ = self.channel_dropout(gated, seed=dropout_seed)
-        return self.base(dropped)
+        logits, _ = self.forward_with_gate(x, dropout_seed=dropout_seed)
+        return logits
 
     def parameter_report(self) -> dict[str, int]:
-        total = sum(parameter.numel() for parameter in self.parameters())
-        auxiliary = 0 if self.gate is None else sum(p.numel() for p in self.gate.parameters())
-        return {"total": int(total), "active": int(total), "auxiliary": int(auxiliary)}
+        trainable = sum(
+            parameter.numel() for parameter in self.parameters() if parameter.requires_grad
+        )
+        frozen = sum(
+            parameter.numel() for parameter in self.parameters() if not parameter.requires_grad
+        )
+        auxiliary = (
+            0
+            if self.gate is None
+            else sum(
+                parameter.numel()
+                for parameter in self.gate.parameters()
+                if parameter.requires_grad
+            )
+        )
+        return {
+            "total": int(trainable),
+            "active": int(trainable),
+            "auxiliary": int(auxiliary),
+            "frozen": int(frozen),
+        }
