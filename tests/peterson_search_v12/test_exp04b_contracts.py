@@ -99,6 +99,18 @@ class _ToyExpert(torch.nn.Module):
         return self.bias[None].expand(len(x), -1)
 
 
+class _SeedAwareExpert(_ToyExpert):
+    def __init__(self, bias: tuple[float, float]) -> None:
+        super().__init__(bias)
+        self.last_dropout_seed: int | None = None
+
+    def forward(
+        self, x: torch.Tensor, *, dropout_seed: int | None = None
+    ) -> torch.Tensor:
+        self.last_dropout_seed = dropout_seed
+        return super().forward(x)
+
+
 def test_safepath_hard_clean_bypass_is_exact_and_clean_expert_is_frozen() -> None:
     clean = _ToyExpert((1.0, -1.0))
     robust = _ToyExpert((-2.0, 2.0))
@@ -120,6 +132,21 @@ def test_safepath_hard_clean_bypass_is_exact_and_clean_expert_is_frozen() -> Non
     corrupted = model(x, channel_mask=corrupt_mask)
     assert torch.all(corrupted.router_weight > 0)
     assert not torch.equal(corrupted.logits, corrupted.clean_logits)
+
+
+def test_safepath_propagates_deterministic_dropout_seed_to_experts() -> None:
+    clean = _SeedAwareExpert((1.0, -1.0))
+    robust = _SeedAwareExpert((-2.0, 2.0))
+    model = SafePathQCR(
+        clean,
+        robust,
+        router_mode="always",
+        fusion_mode="logit_residual",
+        freeze_clean=True,
+    )
+    model(torch.randn(2, 5, 16), dropout_seed=2026)
+    assert clean.last_dropout_seed == 2026
+    assert robust.last_dropout_seed == 2026
 
 
 def test_stress_suite_is_exhaustive_for_missing_channels_and_deterministic() -> None:
