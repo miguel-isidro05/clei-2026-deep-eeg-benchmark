@@ -184,3 +184,5 @@ def test_smoke_contract_is_small_but_keeps_two_subject_shards() -> None:
     manifest = build_search_manifest(config, selected_w2=selected, revision="abc123")
     assert sum(cell.wave == "w2" for cell in manifest.cells) == 6
     assert len({cell.config_id for cell in manifest.cells if cell.wave == "w2"}) == 3
+    w3_ids = {cell.config_id for cell in manifest.cells if cell.wave == "w3"}
+    assert "exp04b-w3-fbc-control" in w3_ids
