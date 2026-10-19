@@ -15,6 +15,7 @@ from experiments.peterson_search_v12.exp05_fbcnet_mechanisms.catalog import (
 )
 from experiments.peterson_search_v12.exp05_fbcnet_mechanisms.mechanisms import (
     ConstrainedSincFilterBank,
+    median_of_means_log_power,
     prepare_fit_context,
 )
 from experiments.peterson_search_v12.exp05_fbcnet_mechanisms.models import (
@@ -105,6 +106,46 @@ def test_window_models_aggregate_grouped_windows_to_trial_logits(index):
     assert features.shape[0] == 2
     assert model.last_window_weights is not None
     assert torch.allclose(model.last_window_weights.sum(dim=1), torch.ones(2))
+
+
+@pytest.mark.parametrize("blocks", (3, 4, 5))
+def test_median_of_means_avoids_nondeterministic_reduction(monkeypatch, blocks):
+    x = torch.arange(1, 241, dtype=torch.float32).reshape(2, 2, 60).requires_grad_(True)
+    powers = x.reshape(2, 2, blocks, -1).square().mean(dim=-1)
+    expected = torch.log(powers.median(dim=2).values)
+
+    def forbidden_median(*_args, **_kwargs):
+        raise RuntimeError("torch.median is forbidden under strict CUDA determinism")
+
+    monkeypatch.setattr(torch.Tensor, "median", forbidden_median)
+    was_enabled = torch.are_deterministic_algorithms_enabled()
+    was_warn_only = torch.is_deterministic_algorithms_warn_only_enabled()
+    try:
+        torch.use_deterministic_algorithms(True)
+        actual = median_of_means_log_power(x, blocks=blocks)
+        assert torch.equal(actual, expected)
+        actual.sum().backward()
+        assert x.grad is not None
+        assert torch.isfinite(x.grad).all()
+    finally:
+        torch.use_deterministic_algorithms(was_enabled, warn_only=was_warn_only)
+
+
+@pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA is unavailable")
+def test_median_of_means_is_deterministic_on_cuda():
+    x = torch.arange(1, 241, device="cuda", dtype=torch.float32).reshape(2, 2, 60)
+    x.requires_grad_(True)
+    was_enabled = torch.are_deterministic_algorithms_enabled()
+    was_warn_only = torch.is_deterministic_algorithms_warn_only_enabled()
+    try:
+        torch.use_deterministic_algorithms(True)
+        actual = median_of_means_log_power(x, blocks=4)
+        actual.sum().backward()
+        assert torch.isfinite(actual).all()
+        assert x.grad is not None
+        assert torch.isfinite(x.grad).all()
+    finally:
+        torch.use_deterministic_algorithms(was_enabled, warn_only=was_warn_only)
 
 
 def test_sinc_filters_remain_ordered_and_receive_gradients():

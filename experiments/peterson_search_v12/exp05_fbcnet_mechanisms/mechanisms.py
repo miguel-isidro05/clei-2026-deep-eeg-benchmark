@@ -149,6 +149,20 @@ def clipped_log_variance(x: torch.Tensor, *, stride: int, clip_value: float) -> 
     return segmented_log_variance(clipped, stride)
 
 
+def _deterministic_lower_median(values: torch.Tensor, *, dim: int) -> torch.Tensor:
+    """Return PyTorch's lower median using only deterministic elementwise comparisons."""
+
+    ordered = list(torch.unbind(values, dim=dim))
+    if not ordered:
+        raise ValueError("Median requires at least one value")
+    for upper in range(len(ordered) - 1, 0, -1):
+        for index in range(upper):
+            left, right = ordered[index], ordered[index + 1]
+            ordered[index] = torch.minimum(left, right)
+            ordered[index + 1] = torch.maximum(left, right)
+    return ordered[(len(ordered) - 1) // 2]
+
+
 def median_of_means_log_power(x: torch.Tensor, *, blocks: int) -> torch.Tensor:
     """Robust power feature: median of block-wise mean square values."""
 
@@ -156,7 +170,8 @@ def median_of_means_log_power(x: torch.Tensor, *, blocks: int) -> torch.Tensor:
     if remainder:
         x = F.pad(x, (0, blocks - remainder))
     powers = x.reshape(len(x), x.shape[1], blocks, -1).square().mean(dim=-1)
-    return torch.log(powers.median(dim=2).values.clamp_min(EPSILON))
+    median = _deterministic_lower_median(powers, dim=2)
+    return torch.log(median.clamp_min(EPSILON))
 
 
 def _covariance(trials: np.ndarray) -> np.ndarray:
