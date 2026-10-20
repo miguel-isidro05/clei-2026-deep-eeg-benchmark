@@ -329,7 +329,11 @@ def optimizer_parameter_groups(
 ) -> list[dict[str, object]]:
     """Return disjoint optimizer groups, including the CSP low-LR contract."""
 
-    if candidate.mechanism != "csp_init_finetune" or not isinstance(model, FBCMechanismModel):
+    uses_csp_finetuning = (
+        getattr(candidate, "fit_hook", None) == "csp"
+        and candidate.params.get("csp_mode") == "finetune"
+    )
+    if not uses_csp_finetuning or not isinstance(model, FBCMechanismModel):
         return [{"params": list(model.parameters()), "lr": float(base_lr)}]
     spatial_ids = {id(parameter) for parameter in model.spatial_parameters()}
     spatial = [parameter for parameter in model.parameters() if id(parameter) in spatial_ids]

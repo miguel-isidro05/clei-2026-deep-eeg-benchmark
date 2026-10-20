@@ -39,9 +39,7 @@ def _root() -> Path:
 def exp05_code_sha256(root: Path) -> str:
     paths = list((root / "experiments" / "peterson_search_v12" / "common").rglob("*.py"))
     paths += list(
-        (root / "experiments" / "peterson_search_v12" / "exp05_fbcnet_mechanisms").rglob(
-            "*.py"
-        )
+        (root / "experiments" / "peterson_search_v12" / "exp05_fbcnet_mechanisms").rglob("*.py")
     )
     paths += list((root / "scripts").glob("*peterson_exp05_v12*.py"))
     paths += list((root / "src" / "deepbench").glob("*.py"))
@@ -74,9 +72,7 @@ def _cell_path(output_dir: Path, phase: str, cell_id: str) -> Path:
 
 def _clean_inner_report(report: dict[str, Any]) -> dict[str, Any]:
     cleaned = dict(report)
-    cleaned["post_preprocessing_validation_sha256"] = cleaned.pop(
-        "post_preprocessing_test_sha256"
-    )
+    cleaned["post_preprocessing_validation_sha256"] = cleaned.pop("post_preprocessing_test_sha256")
     cleaned["n_validation_trials"] = cleaned.pop("n_test_trials")
     cleaned["fit_partition"] = "inner_train"
     return cleaned
@@ -93,7 +89,10 @@ def _positions(n_trials: int, *, windows_per_trial: int = 6) -> np.ndarray:
 
 
 def _uses_grouped_windows(candidate: Any) -> bool:
-    return candidate.mechanism in {"global_window_weights", "content_window_attention"}
+    return bool(candidate.params.get("grouped_windows", False)) or candidate.mechanism in {
+        "global_window_weights",
+        "content_window_attention",
+    }
 
 
 def _grouped_windows(x: np.ndarray) -> np.ndarray:
@@ -102,6 +101,28 @@ def _grouped_windows(x: np.ndarray) -> np.ndarray:
     if len(set(counts.tolist())) != 1 or int(counts[0]) != 6:
         raise RuntimeError("Exp05 grouped-window candidates require six windows per trial")
     return windows.reshape(len(x), 6, windows.shape[1], windows.shape[2])
+
+
+def _grouped_fit_arrays(
+    x: np.ndarray, y: np.ndarray, *, grouped: bool
+) -> tuple[np.ndarray, np.ndarray, int]:
+    """Expose grouped crops to train-only fit hooks without changing model input."""
+
+    if not grouped:
+        return x, y, 1
+    trials, windows, channels, n_times = x.shape
+    return x.reshape(trials * windows, channels, n_times), np.repeat(y, windows), windows
+
+
+def _collapse_grouped_sample_weights(
+    weights: np.ndarray | None, *, n_trials: int, windows_per_trial: int
+) -> np.ndarray | None:
+    if weights is None or windows_per_trial == 1:
+        return weights
+    expected = n_trials * windows_per_trial
+    if len(weights) != expected:
+        raise ValueError("Grouped fit-hook weights do not match trial/window support")
+    return weights.reshape(n_trials, windows_per_trial).mean(axis=1).astype(np.float32)
 
 
 def _mechanisms() -> Any:
@@ -136,6 +157,7 @@ def _context_report(context: dict[str, Any]) -> dict[str, Any]:
 
 def _sample_weights(candidate: Any, x: np.ndarray, context: dict[str, Any]) -> np.ndarray | None:
     from . import models as module
+
     if hasattr(module, "sample_weights"):
         values = module.sample_weights(x, candidate, context)
         if values is None:
@@ -193,10 +215,7 @@ def _aggregate(
 
 def _confusion_matrix(y_true: np.ndarray, y_pred: np.ndarray) -> list[list[int]]:
     return [
-        [
-            int(np.sum((y_true == actual) & (y_pred == predicted)))
-            for predicted in (0, 1)
-        ]
+        [int(np.sum((y_true == actual) & (y_pred == predicted))) for predicted in (0, 1)]
         for actual in (0, 1)
     ]
 
@@ -210,6 +229,7 @@ def _run_fold(
     config: Any,
     device: str,
     split_index: int,
+    model_builder: Any = build_model,
 ) -> tuple[dict[str, Any], torch.nn.Module]:
     seed = int(cell.seed) * 100_000 + split_index
     inner_train_indices = np.asarray(split.inner_train_indices, dtype=np.int64)
@@ -240,11 +260,16 @@ def _run_fold(
             inner.x_test, config.condition
         )
         inner_y_validation = np.repeat(recording.y[inner_validation_indices], 6)
-    inner_context = _fit_context(
-        candidate, inner_x_train, inner_y_train, sfreq=recording.sfreq
+    inner_fit_x, inner_fit_y, inner_windows = _grouped_fit_arrays(
+        inner_x_train, inner_y_train, grouped=grouped
     )
-    inner_weights = _sample_weights(candidate, inner_x_train, inner_context)
-    inner_factory = lambda: build_model(  # noqa: E731
+    inner_context = _fit_context(candidate, inner_fit_x, inner_fit_y, sfreq=recording.sfreq)
+    inner_weights = _collapse_grouped_sample_weights(
+        _sample_weights(candidate, inner_fit_x, inner_context),
+        n_trials=len(inner_x_train),
+        windows_per_trial=inner_windows,
+    )
+    inner_factory = lambda: model_builder(  # noqa: E731
         candidate,
         n_chans=recording.x.shape[1],
         n_times=inner_x_train.shape[-1],
@@ -291,11 +316,16 @@ def _run_fold(
         outer_x_test, outer_test_trial_indices = prepare_test_windows(
             outer.x_test, config.condition
         )
-    outer_context = _fit_context(
-        candidate, outer_x_train, outer_y_train, sfreq=recording.sfreq
+    outer_fit_x, outer_fit_y, outer_windows = _grouped_fit_arrays(
+        outer_x_train, outer_y_train, grouped=grouped
     )
-    outer_weights = _sample_weights(candidate, outer_x_train, outer_context)
-    outer_factory = lambda: build_model(  # noqa: E731
+    outer_context = _fit_context(candidate, outer_fit_x, outer_fit_y, sfreq=recording.sfreq)
+    outer_weights = _collapse_grouped_sample_weights(
+        _sample_weights(candidate, outer_fit_x, outer_context),
+        n_trials=len(outer_x_train),
+        windows_per_trial=outer_windows,
+    )
+    outer_factory = lambda: model_builder(  # noqa: E731
         candidate,
         n_chans=recording.x.shape[1],
         n_times=outer_x_train.shape[-1],
@@ -396,6 +426,8 @@ def _run_fold(
         "metrics": compute_metrics(y_true, y_pred, y_score),
         "quality_flags": flags,
     }
+    if hasattr(refit.model, "diagnostic_report"):
+        report["model_diagnostics"] = dict(refit.model.diagnostic_report())
     return report, refit.model
 
 

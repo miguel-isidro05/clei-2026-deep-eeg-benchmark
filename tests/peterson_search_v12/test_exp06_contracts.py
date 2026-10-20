@@ -10,6 +10,7 @@ from experiments.peterson_search_v12.common.identity import canonical_sha256
 from experiments.peterson_search_v12.exp06_window_fusion.analysis import (
     analyze_confirm,
     analyze_screen,
+    load_final_decision,
 )
 from experiments.peterson_search_v12.exp06_window_fusion.catalog import (
     E11_REFERENCE_ID,
@@ -35,15 +36,31 @@ from experiments.peterson_search_v12.exp06_window_fusion.manifest import (
 def _parent(root: Path) -> str:
     decisions = root / "decisions"
     decisions.mkdir(parents=True)
+    analysis = root / "analysis"
+    analysis.mkdir(parents=True)
+    readout = {"ranking": [{"config_id": "exp05-e11", "eligible": True}]}
+    (analysis / "confirm-readout.json").write_text(json.dumps(readout), encoding="utf-8")
+    manifest_sha256 = "b" * 64
     body = {
         "status": "promoted",
         "phase": "confirm",
         "selected_config_id": "exp05-e11",
         "holdout_opened": False,
-        "readout_sha256": "a" * 64,
+        "confirmatory_p_value_used": False,
+        "manifest_sha256": manifest_sha256,
+        "readout_sha256": canonical_sha256(readout),
     }
     payload = {**body, "sha256": canonical_sha256(body)}
     (decisions / "final-promotion.json").write_text(json.dumps(payload), encoding="utf-8")
+    completion_body = {
+        "status": "completed",
+        "experiment": "exp05",
+        "holdout_opened": False,
+        "confirm_manifest_sha256": manifest_sha256,
+        "final_decision_sha256": payload["sha256"],
+    }
+    completion = {**completion_body, "sha256": canonical_sha256(completion_body)}
+    (root / "run_complete.json").write_text(json.dumps(completion), encoding="utf-8")
     return str(payload["sha256"])
 
 
@@ -57,6 +74,12 @@ def test_scope_budgets_new_seeds_and_holdout_are_frozen() -> None:
         replace(config, subjects=("S07",))
 
 
+def test_exp06_output_directories_are_ignored_by_git() -> None:
+    root = Path(__file__).resolve().parents[2]
+    patterns = (root / ".gitignore").read_text(encoding="utf-8").splitlines()
+    assert "results_peterson_exp06*/" in patterns
+
+
 def test_parent_must_be_signed_exp05_e11_with_closed_holdout(tmp_path: Path) -> None:
     signature = _parent(tmp_path)
     assert load_exp05_parent(tmp_path)["sha256"] == signature
@@ -66,7 +89,14 @@ def test_parent_must_be_signed_exp05_e11_with_closed_holdout(tmp_path: Path) -> 
     body = {key: value for key, value in payload.items() if key != "sha256"}
     payload["sha256"] = canonical_sha256(body)
     payload_path.write_text(json.dumps(payload))
-    with pytest.raises(ValueError, match="exp05-e11"):
+    completion_path = tmp_path / "run_complete.json"
+    completion = json.loads(completion_path.read_text())
+    completion_body = {key: value for key, value in completion.items() if key != "sha256"}
+    completion_body["final_decision_sha256"] = payload["sha256"]
+    completion_path.write_text(
+        json.dumps({**completion_body, "sha256": canonical_sha256(completion_body)})
+    )
+    with pytest.raises(ValueError, match="frozen ranking|exp05-e11"):
         load_exp05_parent(tmp_path)
 
 
@@ -157,3 +187,11 @@ def test_analysis_ranks_against_e11_and_keeps_fbc_as_context(tmp_path: Path) -> 
     final_decision = json.loads((tmp_path / "decisions" / "final-promotion.json").read_text())
     assert final_decision["selected_config_id"] == "exp06-e01"
     assert final_decision["holdout_opened"] is False
+    assert load_final_decision(tmp_path)["sha256"] == final_decision["sha256"]
+
+    readout_path = tmp_path / "analysis" / "confirm-readout.json"
+    readout = json.loads(readout_path.read_text())
+    readout["ranking"][0]["accuracy_delta"] = 99.0
+    readout_path.write_text(json.dumps(readout))
+    with pytest.raises(ValueError, match="detached from its readout"):
+        load_final_decision(tmp_path)

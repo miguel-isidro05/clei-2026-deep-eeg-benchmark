@@ -65,9 +65,9 @@ structured change around `e11`.
 | `exp06-e03` | Gaussian positional kernel | A two-parameter contiguous temporal focus reduces variance. | 2 |
 | `exp06-e04` | residual uniform blend | A learned scalar shrinks `e11` toward uniform pooling when data are weak. | 7 |
 | `exp06-e05` | class-conditional global weights | MI and rest may occupy different informative temporal positions. | 12 |
-| `exp06-e06` | residual temporal convolution | A zero-initialized depthwise width-three operator models adjacent-window evidence. | 18 or fewer |
+| `exp06-e06` | residual temporal convolution | A zero-initialized depthwise width-three operator models adjacent-window evidence. | 12 |
 | `exp06-e07` | CSP-init plus global weights | Train-only CSP supplies a spatial prior while `e11` supplies temporal reliability. | 6 |
-| `exp06-e08` | center loss plus global weights | Compact class clusters can stabilize the promoted representation. | classifier feature centers |
+| `exp06-e08` | center loss plus global weights | Compact class clusters can stabilize the promoted representation. | 1,542 |
 | `exp06-e09` | quality weighting plus global weights | Train-fitted artifact weights reduce noisy-trial influence without changing inference. | 6 |
 | `exp06-e10` | window dropout plus global weights | Dropping one crop during training discourages dependence on a single position. | 6 |
 
