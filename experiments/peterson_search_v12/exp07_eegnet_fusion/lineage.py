@@ -37,4 +37,3 @@ def load_exp06_parent(exp06_output_dir: Path) -> dict[str, Any]:
     if decision.get("holdout_opened") is not False:
         raise ValueError("Exp07 parent must keep the holdout closed")
     return decision
-

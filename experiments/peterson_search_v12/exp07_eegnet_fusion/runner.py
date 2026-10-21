@@ -101,7 +101,6 @@ def _resumable(path: Path, fingerprint: dict[str, Any], cell: Any) -> bool:
         and payload.get("fingerprint") == fingerprint
     )
 
-
 def run_phase(
     output_dir: Path,
     config: Any,

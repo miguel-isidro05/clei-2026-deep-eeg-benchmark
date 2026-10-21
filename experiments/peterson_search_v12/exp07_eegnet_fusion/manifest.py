@@ -163,7 +163,6 @@ def build_screen_manifest(
         raise RuntimeError("Exp07 screen budget drifted")
     return manifest
 
-
 def build_confirm_manifest(
     config: Exp07Config,
     catalog: tuple[Any, ...],

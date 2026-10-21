@@ -281,7 +281,6 @@ def load_screen_decision(output_dir: Path) -> dict[str, Any]:
         raise ValueError("Exp07 screen decision is detached from its manifest")
     return payload
 
-
 def analyze_confirm(output_dir: Path, config: Exp07Config) -> dict[str, Any]:
     decision = load_screen_decision(output_dir)
     selected_backbones = tuple(map(str, decision["selected_backbones"]))

@@ -241,4 +241,3 @@ def test_analysis_selects_pairs_then_requires_final_gain_over_e11(tmp_path: Path
     decision = load_final_decision(tmp_path)
     assert decision["selected_config_id"] == lpwf_id
     assert decision["holdout_opened"] is False
-

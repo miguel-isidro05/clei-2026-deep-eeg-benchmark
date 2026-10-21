@@ -189,4 +189,3 @@ def candidate_by_id(config_id: str) -> Exp07Candidate:
 
 def catalog_payload() -> list[dict[str, object]]:
     return [asdict(item) for item in all_candidates()]
-

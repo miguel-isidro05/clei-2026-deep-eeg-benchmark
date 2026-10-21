@@ -271,4 +271,3 @@ def audit_phase(
         },
         "complete": True,
     }
-

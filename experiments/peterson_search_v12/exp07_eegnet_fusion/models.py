@@ -166,4 +166,3 @@ def build_model(
         n_times=n_times,
         sfreq=sfreq,
     )
-

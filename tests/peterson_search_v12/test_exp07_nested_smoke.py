@@ -113,4 +113,3 @@ def test_screen_runner_and_strict_auditor_complete_on_synthetic_recording(
     assert confirm_audit["complete"] is True
     final = analyze_confirm(tmp_path, config)
     assert final["reference"]["config_id"] == "exp07-e11-reference"
-

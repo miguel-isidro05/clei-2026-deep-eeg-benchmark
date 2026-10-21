@@ -88,4 +88,3 @@ python -u scripts/check_peterson_exp07_v12.py \
   --output-dir "$output" --exp06-dir "$PETERSON_EXP07_EXP06_DIR" \
   --phase all "${smoke_args[@]}"
 echo "peterson_exp07=OK output=$output"
-

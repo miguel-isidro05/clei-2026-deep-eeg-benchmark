@@ -86,4 +86,3 @@ def smoke_config() -> Exp07Config:
         max_promoted_backbones=1,
         min_subject_wins=1,
     )
-

@@ -96,4 +96,3 @@ def test_exp07_controls_are_exact_exp06_controls(old_id: str, new_id: str, group
     x = torch.randn(2, 6, 15, 256) if grouped else torch.randn(12, 15, 256)
     with torch.no_grad():
         assert torch.equal(old(x), new(x))
-

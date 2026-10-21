@@ -92,4 +92,3 @@ The holdout remains closed regardless of the outcome.
 - If the effect does not transfer, stop architecture search, retain e11 as an
   FBCNet-specific extension, and open the holdout once under the separate final
   evaluation protocol.
-
