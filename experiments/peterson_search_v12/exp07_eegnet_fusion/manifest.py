@@ -220,4 +220,3 @@ def manifest_from_payload(payload: dict[str, Any]) -> Exp07Manifest:
     if manifest.experiment != "exp07" or manifest.phase not in {"screen", "confirm"}:
         raise ValueError("Manifest belongs to another experiment")
     return manifest
-

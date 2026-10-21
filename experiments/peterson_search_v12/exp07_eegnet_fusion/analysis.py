@@ -361,4 +361,3 @@ def load_final_decision(output_dir: Path) -> dict[str, Any]:
     if payload.get("selected_config_id") != expected or payload.get("status") != expected_status:
         raise ValueError("Exp07 final decision differs from the frozen ranking")
     return payload
-

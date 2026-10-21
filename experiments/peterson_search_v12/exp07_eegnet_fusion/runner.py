@@ -245,4 +245,3 @@ def write_run_failure(
         output_dir / "logs" / f"{phase}-shard-{shard_index}-failure.json",
         {"phase": phase, "shard_index": shard_index, "error": repr(error), "status": "failed"},
     )
-
