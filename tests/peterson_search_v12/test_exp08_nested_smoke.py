@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+import json
 from dataclasses import replace
 from types import SimpleNamespace
 
 import numpy as np
+import pytest
 
 from experiments.peterson_search_v12.common.io import write_json_atomic
 from experiments.peterson_search_v12.exp08_fixed_convergence.audit import audit_phase
@@ -70,4 +72,31 @@ def test_screen_runner_shares_backbones_and_passes_strict_audit(tmp_path, monkey
     )
     assert report["complete"] is True
     assert report["shared_backbone_pairs"] == 5
+
+    uniform_path = next((tmp_path / "screen_cells").glob("*eegnet42-k32-uniform*.json"))
+    lpwf_path = next((tmp_path / "screen_cells").glob("*eegnet42-k32-lpwf*.json"))
+    uniform = json.loads(uniform_path.read_text())
+    lpwf = json.loads(lpwf_path.read_text())
+    assert uniform["fold_reports"][0]["fusion_trainable_parameters"] == 0
+    assert lpwf["fold_reports"][0]["fusion_trainable_parameters"] == 6
+    assert (
+        uniform["fold_reports"][0]["backbone_state_sha256"]
+        == lpwf["fold_reports"][0]["backbone_state_sha256"]
+    )
+
+    uniform["fold_reports"][0]["backbone_history"][0]["updates"] += 1
+    body = {key: value for key, value in uniform.items() if key != "sha256"}
+    from experiments.peterson_search_v12.common.identity import canonical_sha256
+
+    uniform["sha256"] = canonical_sha256(body)
+    uniform_path.write_text(json.dumps(uniform))
+    with pytest.raises(ValueError, match="update total|trajectory"):
+        audit_phase(
+            tmp_path,
+            config,
+            catalog,
+            phase="screen",
+            revision="test-revision",
+            parent_decision_sha256=parent_sha,
+        )
 

@@ -32,7 +32,9 @@ from .manifest import (
 )
 
 
-def _validate_deep_fold(fold: dict[str, Any], config: Exp08Config) -> None:
+def _validate_deep_fold(
+    fold: dict[str, Any], config: Exp08Config, *, aggregation: str, seed: int
+) -> None:
     _validate_split(fold)
     refit = fold.get("refit_preprocessing")
     if not isinstance(refit, dict) or refit.get("fit_partition") != "outer_train":
@@ -50,18 +52,39 @@ def _validate_deep_fold(fold: dict[str, Any], config: Exp08Config) -> None:
         range(1, config.backbone_epochs + 1)
     ):
         raise ValueError("Exp08 backbone epochs are not sequential")
+    previous_updates = 0
+    for item in history:
+        values = [
+            float(item.get("train_loss", float("nan"))),
+            float(item.get("learning_rate", float("nan"))),
+        ]
+        if not np.isfinite(values).all():
+            raise ValueError("Exp08 backbone history contains non-finite values")
+        updates = int(item.get("updates", 0))
+        if updates <= previous_updates:
+            raise ValueError("Exp08 backbone update count is not increasing")
+        previous_updates = updates
+    if int(fold.get("backbone_updates", 0)) != previous_updates:
+        raise ValueError("Exp08 backbone update total is inconsistent")
     if int(fold.get("n_train_examples", 0)) != 6 * int(fold.get("n_train_trials", -1)):
         raise ValueError("Exp08 did not train crop-wise on six windows per trial")
     if int(fold.get("windows_per_test_trial", 0)) != 6:
         raise ValueError("Exp08 did not evaluate six windows per trial")
     if fold.get("fusion_fit_partition") != "outer_train_only":
         raise ValueError("Exp08 fusion saw a non-training partition")
-    if int(fold.get("fusion_trainable_parameters", 0)) != 6:
-        raise ValueError("Exp08 fusion must expose exactly six parameters")
     before = str(fold.get("backbone_state_sha256", ""))
     after = str(fold.get("backbone_state_after_fusion_sha256", ""))
     if len(before) != 64 or before != after:
         raise ValueError("Exp08 fusion modified its frozen backbone")
+    trajectory = {
+        "seed": seed,
+        "epochs": config.backbone_epochs,
+        "updates": previous_updates,
+        "history": history,
+        "state_sha256": before,
+    }
+    if fold.get("backbone_trajectory_sha256") != canonical_sha256(trajectory):
+        raise ValueError("Exp08 backbone trajectory signature is invalid")
     diagnostics = fold.get("model_diagnostics")
     if (
         not isinstance(diagnostics, dict)
@@ -73,6 +96,33 @@ def _validate_deep_fold(fold: dict[str, Any], config: Exp08Config) -> None:
         raise ValueError("Exp08 fold has invalid window weights")
     if not np.isclose(weights.sum(), 1.0, atol=1e-6):
         raise ValueError("Exp08 window weights are not normalized")
+    if fold.get("aggregation") != aggregation or diagnostics.get("aggregation") != aggregation:
+        raise ValueError("Exp08 fold aggregation is mislabeled")
+    fusion_history = fold.get("fusion_history")
+    expected_parameters = 0 if aggregation == "uniform" else 6
+    expected_epochs = 0 if aggregation == "uniform" else config.fusion_epochs
+    if int(fold.get("fusion_trainable_parameters", -1)) != expected_parameters:
+        raise ValueError("Exp08 fusion parameter count is invalid")
+    if int(fold.get("fusion_epochs", -1)) != expected_epochs:
+        raise ValueError("Exp08 fusion epoch count is invalid")
+    if not isinstance(fusion_history, list) or len(fusion_history) != expected_epochs:
+        raise ValueError("Exp08 fusion history length is invalid")
+    logits = np.asarray(diagnostics.get("window_logits"), dtype=float)
+    if logits.shape != (6,) or not np.isfinite(logits).all():
+        raise ValueError("Exp08 window logits are invalid")
+    if aggregation == "uniform":
+        if not np.allclose(logits, 0.0) or not np.allclose(weights, 1.0 / 6.0):
+            raise ValueError("Exp08 uniform aggregation is not exactly uniform")
+    else:
+        for index, item in enumerate(fusion_history, start=1):
+            if int(item.get("epoch", 0)) != index:
+                raise ValueError("Exp08 fusion epochs are not sequential")
+            values = [
+                float(item.get("train_loss", float("nan"))),
+                float(item.get("learning_rate", float("nan"))),
+            ]
+            if not np.isfinite(values).all():
+                raise ValueError("Exp08 fusion history contains non-finite values")
 
 
 def _validate_cell(
@@ -82,6 +132,10 @@ def _validate_cell(
     candidate: Any,
     config: Exp08Config,
 ) -> None:
+    signed_body = dict(payload)
+    payload_signature = str(signed_body.pop("sha256", ""))
+    if payload_signature != canonical_sha256(signed_body):
+        raise ValueError(f"Cell {expected.cell_id} signature is invalid")
     required = {
         "schema_version": 1,
         "status": "completed",
@@ -117,6 +171,18 @@ def _validate_cell(
             raise ValueError(f"Exp08 fingerprint mismatch: {key}")
     if config.profile == "full" and fingerprint.get("git_dirty") is not False:
         raise ValueError("Full Exp08 result came from a dirty tree")
+    for name in ("code_sha256", "data_sha256"):
+        value = fingerprint.get(name)
+        if not isinstance(value, str) or len(value) != 64:
+            raise ValueError(f"Exp08 fingerprint has invalid {name}")
+    runtime = payload.get("runtime")
+    environment = runtime.get("environment") if isinstance(runtime, dict) else None
+    if not isinstance(environment, dict):
+        raise ValueError("Exp08 runtime environment is missing")
+    if fingerprint.get("environment_sha256") != canonical_sha256(environment):
+        raise ValueError("Exp08 environment fingerprint drifted")
+    if fingerprint.get("device") != environment.get("device"):
+        raise ValueError("Exp08 device fingerprint drifted")
     reports = payload.get("fold_reports")
     if not isinstance(reports, list) or len(reports) != len(expected.folds):
         raise ValueError("Exp08 cell has incomplete folds")
@@ -127,6 +193,8 @@ def _validate_cell(
     scores: list[np.ndarray] = []
     flags: set[str] = set()
     split_hashes: list[str] = []
+    outer_tests: list[set[int]] = []
+    trial_universe: set[int] | None = None
     for index, fold in enumerate(reports):
         if candidate.backbone == "fbcnet":
             _validate_split(fold)
@@ -138,7 +206,12 @@ def _validate_cell(
                 split_index=index,
             )
         else:
-            _validate_deep_fold(fold, config)
+            _validate_deep_fold(
+                fold,
+                config,
+                aggregation=candidate.aggregation,
+                seed=int(expected.seed) * 100_000 + index,
+            )
         y_true, y_pred, y_score = _validate_fold_metrics(fold)
         recomputed = validation_quality_flags(y_true.tolist(), y_pred.tolist())
         if fold.get("quality_flags") != sorted(set(recomputed)):
@@ -148,6 +221,16 @@ def _validate_cell(
         predictions.append(y_pred)
         scores.append(y_score)
         split = fold["split"]
+        outer_train = set(map(int, split["outer_train_indices"]))
+        outer_test = set(map(int, split["outer_test_indices"]))
+        universe = outer_train | outer_test
+        if trial_universe is None:
+            trial_universe = universe
+        elif universe != trial_universe:
+            raise ValueError("Exp08 folds use different trial universes")
+        if any(outer_test & previous for previous in outer_tests):
+            raise ValueError("Exp08 outer-test folds overlap")
+        outer_tests.append(outer_test)
         split_hashes.append(
             canonical_sha256(
                 {
@@ -178,8 +261,21 @@ def _validate_cell(
             raise ValueError(f"Exp08 aggregate metric drifted: {name}")
     if payload.get("quality_flags") != sorted(flags):
         raise ValueError("Exp08 aggregate quality flags drifted")
+    if trial_universe is None:
+        raise ValueError("Exp08 cell has no trial universe")
+    if len(expected.folds) == 5 and set().union(*outer_tests) != trial_universe:
+        raise ValueError("Exp08 outer-test folds do not partition the trial universe")
     if fingerprint.get("split_sha256") != canonical_sha256(split_hashes):
         raise ValueError("Exp08 split fingerprint drifted")
+    parameter_report = payload.get("parameter_report")
+    if not isinstance(parameter_report, dict) or int(parameter_report.get("total", 0)) < 1:
+        raise ValueError("Exp08 parameter report is invalid")
+    if candidate.backbone != "fbcnet":
+        expected_fusion = 0 if candidate.aggregation == "uniform" else 6
+        if int(parameter_report.get("trainable_stage2_fusion", -1)) != expected_fusion:
+            raise ValueError("Exp08 parameter report has the wrong fusion size")
+        if int(parameter_report.get("trainable_at_inference", -1)) != 0:
+            raise ValueError("Exp08 inference parameter state is mislabeled")
 
 
 def audit_phase(
@@ -228,6 +324,8 @@ def audit_phase(
     candidates = {item.config_id: item for item in all_candidates()}
     pair_hashes: dict[tuple[str, int, str, int], dict[str, str]] = defaultdict(dict)
     code_hashes: set[str] = set()
+    data_hashes: dict[str, set[str]] = defaultdict(set)
+    environment_hashes: dict[str, set[str]] = defaultdict(set)
     for expected in manifest.cells:
         payload = json.loads(
             (output_dir / f"{phase}_cells" / f"{expected.cell_id}.json").read_text(
@@ -236,13 +334,20 @@ def audit_phase(
         )
         candidate = candidates[expected.config_id]
         _validate_cell(payload, expected, manifest, candidate, config)
-        code_hashes.add(str(payload["fingerprint"]["code_sha256"]))
+        fingerprint = payload["fingerprint"]
+        code_hashes.add(str(fingerprint["code_sha256"]))
+        data_hashes[expected.subject].add(str(fingerprint["data_sha256"]))
+        environment_hashes[expected.subject].add(str(fingerprint["environment_sha256"]))
         if candidate.backbone != "fbcnet":
             for fold in payload["fold_reports"]:
                 key = (expected.subject, expected.seed, candidate.family, int(fold["outer_fold"]))
                 pair_hashes[key][candidate.aggregation] = str(fold["backbone_state_sha256"])
     if len(code_hashes) != 1:
         raise ValueError("Exp08 cells were produced by different code surfaces")
+    if any(len(values) != 1 for values in data_hashes.values()):
+        raise ValueError("Exp08 subject data hashes drifted")
+    if any(len(values) != 1 for values in environment_hashes.values()):
+        raise ValueError("Exp08 subject environments drifted")
     for key, hashes in pair_hashes.items():
         if set(hashes) != {"uniform", "lpwf"} or len(set(hashes.values())) != 1:
             raise ValueError(f"Exp08 pair does not share one backbone: {key}")

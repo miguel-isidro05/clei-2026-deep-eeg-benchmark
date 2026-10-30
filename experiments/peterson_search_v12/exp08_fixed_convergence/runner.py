@@ -102,8 +102,11 @@ def _resumable(path: Path, fingerprint: dict[str, Any], cell: Any) -> bool:
         payload = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError):
         return False
+    body = dict(payload)
+    signature = str(body.pop("sha256", ""))
     return bool(
-        payload.get("status") == "completed"
+        signature == canonical_sha256(body)
+        and payload.get("status") == "completed"
         and payload.get("cell_id") == cell.cell_id
         and payload.get("fingerprint") == fingerprint
     )
@@ -233,8 +236,6 @@ def _deep_fold_pair(
         "n_test_trials": int(len(outer_test)),
         "windows_per_test_trial": 6,
         "fusion_fit_partition": "outer_train_only",
-        "fusion_epochs": int(config.fusion_epochs),
-        "fusion_trainable_parameters": 6,
     }
     y_true = recording.y[outer_test]
 
@@ -255,6 +256,8 @@ def _deep_fold_pair(
         return {
             **common,
             "aggregation": aggregation,
+            "fusion_epochs": 0 if aggregation == "uniform" else int(config.fusion_epochs),
+            "fusion_trainable_parameters": 0 if aggregation == "uniform" else 6,
             "model_diagnostics": {
                 "aggregation": aggregation,
                 "window_logits": np.asarray(window_logits, dtype=float).tolist(),
@@ -291,7 +294,7 @@ def _payload(
     y_pred = np.asarray(predictions, dtype=np.int64)
     y_score = np.asarray(scores, dtype=float)
     flags = sorted({flag for report in reports for flag in report["quality_flags"]})
-    return {
+    body = {
         "schema_version": 1,
         "status": "completed",
         "experiment": "exp08",
@@ -315,6 +318,7 @@ def _payload(
         "fingerprint": fingerprint,
         "runtime": {"seconds": float(elapsed), "environment": environment},
     }
+    return {**body, "sha256": canonical_sha256(body)}
 
 
 def run_phase(
@@ -477,8 +481,9 @@ def run_phase(
                                 parameter_report={
                                     "total": base_parameters + extra,
                                     "trainable": base_parameters + extra,
-                                    "backbone_stage_trainable": base_parameters,
-                                    "fusion_stage_trainable": extra,
+                                    "trainable_stage1_backbone": base_parameters,
+                                    "trainable_stage2_fusion": extra,
+                                    "trainable_at_inference": 0,
                                     "frozen_during_fusion": base_parameters,
                                 },
                             ),

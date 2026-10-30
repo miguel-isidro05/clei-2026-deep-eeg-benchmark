@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from pathlib import Path
+
 from experiments.peterson_search_v12.exp08_fixed_convergence.catalog import (
     backbone_pairs,
     experimental_candidates,
@@ -29,4 +31,9 @@ def test_screen_manifest_has_frozen_budget_and_closed_holdout() -> None:
     )
     assert len(manifest.cells) == 216
     assert not ({cell.subject for cell in manifest.cells} & set(config.holdout_subjects))
+
+
+def test_exp08_output_directory_is_gitignored() -> None:
+    root = Path(__file__).resolve().parents[2]
+    assert "results_peterson_exp08*/" in (root / ".gitignore").read_text().splitlines()
 
