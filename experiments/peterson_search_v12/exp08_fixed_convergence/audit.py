@@ -114,6 +114,10 @@ def _validate_deep_fold(
         if not np.allclose(logits, 0.0) or not np.allclose(weights, 1.0 / 6.0):
             raise ValueError("Exp08 uniform aggregation is not exactly uniform")
     else:
+        expected_weights = np.exp(logits - logits.max())
+        expected_weights /= expected_weights.sum()
+        if not np.allclose(weights, expected_weights, atol=1e-7):
+            raise ValueError("Exp08 LPWF weights do not match their signed logits")
         for index, item in enumerate(fusion_history, start=1):
             if int(item.get("epoch", 0)) != index:
                 raise ValueError("Exp08 fusion epochs are not sequential")
